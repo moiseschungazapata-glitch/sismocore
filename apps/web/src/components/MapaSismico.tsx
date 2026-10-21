@@ -27,10 +27,24 @@ function AjustarVista({ eventos }: MapaSismicoProps) {
         L.latLng(evento.latitud, evento.longitud)
     );
 
-    mapa.fitBounds(L.latLngBounds(coordenadas), {
-      padding: [40, 40],
-      maxZoom: 6,
-    });
+    let frame = 0;
+    const ajustar = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        mapa.invalidateSize({ pan: false });
+        mapa.fitBounds(L.latLngBounds(coordenadas), {
+          padding: [30, 30],
+          maxZoom: 6,
+        });
+      });
+    };
+    ajustar();
+    const observer = new ResizeObserver(ajustar);
+    observer.observe(mapa.getContainer());
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
   }, [eventos, mapa]);
 
   return null;
@@ -48,6 +62,7 @@ export default function MapaSismico({
   eventos,
 }: MapaSismicoProps) {
   return (
+    <section aria-label="Mapa de eventos sísmicos observados">
     <div
       style={{
         width: "100%",
@@ -95,10 +110,16 @@ export default function MapaSismico({
               Latitud: {evento.latitud}
               <br />
               Longitud: {evento.longitud}
+              <br />
+              Fecha UTC: {evento.ocurrido_en}
+              <br />
+              <a href={evento.url_fuente} target="_blank" rel="noreferrer">Ver evento original en USGS</a>
             </Popup>
           </CircleMarker>
         ))}
       </MapContainer>
     </div>
+    <p className="map-legend">Magnitud: <span style={{ color: '#22c55e' }}>● menor de 2.5</span> · <span style={{ color: '#eab308' }}>● 2.5 a menos de 4</span> · <span style={{ color: '#f97316' }}>● 4 a menos de 6</span> · <span style={{ color: '#dc2626' }}>● 6 o más</span> · <span style={{ color: '#94a3b8' }}>● sin dato</span>. El tamaño del punto no representa un área de impacto.</p>
+    </section>
   );
 }

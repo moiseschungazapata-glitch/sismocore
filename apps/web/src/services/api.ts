@@ -1,44 +1,71 @@
-
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 
 export interface HealthResponse {
-  estado: string;
-  servicio: string;
-  mensaje?: string;
+  estado: string
+  servicio: string
+  base_datos: 'conectada' | 'desconectada'
+  configurada: boolean
+  sincronizacion: string
+  mensaje: string
 }
 
 export interface EventoSismico {
-  id: string;
-  magnitud: number | null;
-  lugar: string;
-  latitud: number;
-  longitud: number;
-  profundidad: number;
+  id: string
+  id_externo: string
+  magnitud: number | null
+  tipo_magnitud: string | null
+  lugar: string
+  latitud: number
+  longitud: number
+  profundidad: number
+  ocurrido_en: string
+  url_fuente: string
+  estado_revision: string
+}
+
+export interface EjecucionIngesta {
+  estado: string
+  iniciado_en: string
+  finalizado_en: string | null
+  registros_recibidos: number
+  registros_insertados: number
+  registros_actualizados: number
+  registros_rechazados: number
+  error_resumen: string | null
 }
 
 export interface EventosResponse {
-  total: number;
-  eventos: EventoSismico[];
-  fuente: string;
-  mensaje: string;
+  total: number
+  eventos: EventoSismico[]
+  fuente: string
+  almacenamiento: string
+  periodo_dias: number
+  consultado_en: string
+  ultima_sincronizacion: string | null
+  sincronizacion: string
+  ultima_ejecucion: EjecucionIngesta | null
+  mensaje: string
 }
 
-export async function verificarAPI(): Promise<HealthResponse> {
-  const response = await fetch(`${API_URL}/health`);
-
-  if (!response.ok) {
-    throw new Error("No se pudo verificar el estado de la API.");
+async function request<T>(path: string): Promise<T> {
+  try {
+    const response = await fetch(`${API_URL}${path}`, { signal: AbortSignal.timeout(20000) })
+    if (!response.ok) {
+      let message = `El servicio devolvio un error (${response.status}).`
+      try {
+        const body = await response.json()
+        if (typeof body.detail === 'string') message = body.detail
+      } catch { /* A development proxy can return a plain text 502. */ }
+      throw new Error(message)
+    }
+    return await response.json() as T
+  } catch (error) {
+    if (error instanceof TypeError || (error instanceof DOMException && error.name === 'TimeoutError')) {
+      throw new Error('No se pudo contactar con la API. Inicia el proyecto con Iniciar SISMOCORE.cmd o npm run dev desde la carpeta principal.', { cause: error })
+    }
+    throw error
   }
-
-  return response.json() as Promise<HealthResponse>;
 }
 
-export async function obtenerEventos(): Promise<EventosResponse> {
-  const response = await fetch(`${API_URL}/api/v1/eventos/`);
-
-  if (!response.ok) {
-    throw new Error("No se pudieron obtener los eventos sísmicos.");
-  }
-
-  return response.json() as Promise<EventosResponse>;
-}
+export const verificarAPI = () => request<HealthResponse>('/health')
+export const obtenerEventos = () => request<EventosResponse>('/api/v1/eventos/')
