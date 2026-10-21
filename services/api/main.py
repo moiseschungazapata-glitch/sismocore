@@ -45,3 +45,9 @@ app.include_router(eventos_router, prefix=settings.API_PREFIX)
 @app.get('/')
 async def inicio():
     return {'mensaje': settings.APP_NAME, 'version': settings.APP_VERSION}
+
+
+@app.get('/live')
+async def process_alive():
+    # Process liveness is independent of a slow/offline external database.
+    return {'servicio': 'api', 'estado': 'activo', 'version': settings.APP_VERSION}

@@ -11,6 +11,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 import type { EventoSismico } from "../services/api";
+import { magnitudeScale, magnitudeStyle } from "../lib/format";
 
 interface MapaSismicoProps {
   eventos: EventoSismico[];
@@ -28,13 +29,17 @@ function AjustarVista({ eventos }: MapaSismicoProps) {
     );
 
     let frame = 0;
+    let disposed = false;
     const ajustar = () => {
+      if (disposed) return;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
+        if (disposed || !mapa.getContainer().isConnected) return;
         mapa.invalidateSize({ pan: false });
         mapa.fitBounds(L.latLngBounds(coordenadas), {
           padding: [30, 30],
           maxZoom: 6,
+          animate: false,
         });
       });
     };
@@ -42,6 +47,7 @@ function AjustarVista({ eventos }: MapaSismicoProps) {
     const observer = new ResizeObserver(ajustar);
     observer.observe(mapa.getContainer());
     return () => {
+      disposed = true;
       observer.disconnect();
       cancelAnimationFrame(frame);
     };
@@ -50,32 +56,20 @@ function AjustarVista({ eventos }: MapaSismicoProps) {
   return null;
 }
 
-function obtenerColor(magnitud: number | null): string {
-  if (magnitud === null) return "#64748b";
-  if (magnitud >= 6) return "#dc2626";
-  if (magnitud >= 4) return "#f97316";
-  if (magnitud >= 2.5) return "#eab308";
-  return "#22c55e";
-}
-
 export default function MapaSismico({
   eventos,
 }: MapaSismicoProps) {
   return (
     <section aria-label="Mapa de eventos sísmicos observados">
-    <div
-      style={{
-        width: "100%",
-        height: "480px",
-        borderRadius: "12px",
-        overflow: "hidden",
-      }}
-    >
+    <div className="map-frame">
       <MapContainer
         center={[-9.19, -75.015]}
         zoom={5}
         style={{ width: "100%", height: "100%" }}
         scrollWheelZoom
+        zoomAnimation={false}
+        fadeAnimation={false}
+        markerZoomAnimation={false}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -94,8 +88,8 @@ export default function MapaSismico({
                 : Math.max(6, evento.magnitud * 2)
             }
             pathOptions={{
-              color: obtenerColor(evento.magnitud),
-              fillColor: obtenerColor(evento.magnitud),
+              color: magnitudeStyle(evento.magnitud).color,
+              fillColor: magnitudeStyle(evento.magnitud).color,
               fillOpacity: 0.75,
               weight: 2,
             }}
@@ -119,7 +113,8 @@ export default function MapaSismico({
         ))}
       </MapContainer>
     </div>
-    <p className="map-legend">Magnitud: <span style={{ color: '#22c55e' }}>● menor de 2.5</span> · <span style={{ color: '#eab308' }}>● 2.5 a menos de 4</span> · <span style={{ color: '#f97316' }}>● 4 a menos de 6</span> · <span style={{ color: '#dc2626' }}>● 6 o más</span> · <span style={{ color: '#94a3b8' }}>● sin dato</span>. El tamaño del punto no representa un área de impacto.</p>
+    <div className="map-legend" aria-label="Leyenda por magnitud"><strong>Magnitud reportada</strong>{magnitudeScale.map(rango => <span className="map-legend-item" key={rango.key}><span className="map-swatch" style={{ backgroundColor: rango.color }} aria-hidden="true" />{rango.label}</span>)}</div>
+    <p className="map-note">El color y el tamaño representan magnitud, no un nivel oficial de peligro ni una zona de impacto.</p>
     </section>
   );
 }

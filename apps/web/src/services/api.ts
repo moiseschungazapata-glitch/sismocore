@@ -47,11 +47,32 @@ export interface EventosResponse {
   mensaje: string
 }
 
+const CACHE_KEY = 'sismocore.catalogo.v1'
+
+export function recuperarCatalogo(): EventosResponse | null {
+  try {
+    const snapshot = JSON.parse(sessionStorage.getItem(CACHE_KEY) || 'null')
+    if (!snapshot || !Array.isArray(snapshot.eventos) ||
+      !Number.isFinite(Date.parse(snapshot.consultado_en)) ||
+      Date.now() - Date.parse(snapshot.consultado_en) > 86400000) return null
+    const limite = Date.now() - 7 * 86400000
+    const eventos = snapshot.eventos.filter((evento: EventoSismico) =>
+      typeof evento.id === 'string' && typeof evento.lugar === 'string' &&
+      Number.isFinite(evento.latitud) && Number.isFinite(evento.longitud) &&
+      Number.isFinite(evento.profundidad) &&
+      (evento.magnitud === null || Number.isFinite(evento.magnitud)) &&
+      Date.parse(evento.ocurrido_en) >= limite)
+    return { ...snapshot, eventos, total: eventos.length }
+  } catch { return null }
+}
+
 async function request<T>(path: string): Promise<T> {
   try {
     const response = await fetch(`${API_URL}${path}`, { signal: AbortSignal.timeout(20000) })
     if (!response.ok) {
-      let message = `El servicio devolvio un error (${response.status}).`
+      let message = response.status === 502 || response.status === 504
+        ? 'La API local se está recuperando. La conexión se reintentará automáticamente.'
+        : `El servicio devolvió un error (${response.status}).`
       try {
         const body = await response.json()
         if (typeof body.detail === 'string') message = body.detail
@@ -68,4 +89,8 @@ async function request<T>(path: string): Promise<T> {
 }
 
 export const verificarAPI = () => request<HealthResponse>('/health')
-export const obtenerEventos = () => request<EventosResponse>('/api/v1/eventos/')
+export async function obtenerEventos(): Promise<EventosResponse> {
+  const datos = await request<EventosResponse>('/api/v1/eventos/')
+  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(datos)) } catch { /* Storage can be disabled or full. */ }
+  return datos
+}

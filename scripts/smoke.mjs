@@ -18,11 +18,11 @@ try {
   const data = await response.json();
   if (data.almacenamiento !== 'Supabase' || !data.total || !data.consultado_en) throw new Error('Catálogo persistente incompleto.');
   await page.screenshot({ path: join(root, '.runtime/dashboard.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Eventos sísmicos', exact: true }).click();
+  await page.getByRole('link', { name: 'Eventos sísmicos', exact: true }).click();
   if (await page.locator('tbody tr').count() !== Math.min(20, data.total)) throw new Error('La tabla no coincide con la API.');
   await page.getByLabel('Buscar ubicación o ID').fill(data.eventos[0].id_externo);
   if (await page.locator('tbody tr').count() !== 1) throw new Error('La búsqueda no filtra la tabla.');
-  await page.getByRole('button', { name: 'Mapa sísmico', exact: true }).click();
+  await page.getByRole('link', { name: 'Mapa sísmico', exact: true }).click();
   await page.locator('.leaflet-container').waitFor();
   if (await page.locator('.leaflet-interactive').count() !== 1) throw new Error('El mapa no comparte los filtros.');
   await page.getByRole('button', { name: 'Limpiar filtros', exact: true }).click();
@@ -30,12 +30,12 @@ try {
   if (await page.locator('.leaflet-interactive').count() !== data.total) throw new Error('No se restauraron los puntos del mapa.');
   const tiles = await page.locator('.leaflet-tile-loaded').count();
   await page.screenshot({ path: join(root, '.runtime/mapa.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Análisis', exact: true }).click();
+  await page.getByRole('link', { name: 'Análisis', exact: true }).click();
   await page.getByRole('heading', { name: 'Distribución por magnitud', exact: true }).waitFor();
   if (await page.locator('.bar-chart').count() !== 2) throw new Error('Faltan las gráficas descriptivas.');
-  await page.getByRole('button', { name: 'Fuentes de datos', exact: true }).click();
+  await page.getByRole('link', { name: 'Fuentes de datos', exact: true }).click();
   await page.getByText('Supabase conectada', { exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Reportes', exact: true }).click();
+  await page.getByRole('link', { name: 'Reportes', exact: true }).click();
   const pending = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Descargar eventos CSV', exact: true }).click();
   const download = await pending;
@@ -43,7 +43,7 @@ try {
   await download.saveAs(file);
   const csv = await readFile(file, 'utf8');
   if (!csv.includes(data.eventos[0].id_externo) || !csv.includes('fecha_utc')) throw new Error('CSV incompleto.');
-  await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+  await page.getByRole('link', { name: 'Dashboard', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(400);
   const markersVisible = await page.locator('.leaflet-container').evaluate(container => {

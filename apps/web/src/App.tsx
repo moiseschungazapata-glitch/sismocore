@@ -1,184 +1,103 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
-import { obtenerEventos, verificarAPI, type EventoSismico, type EventosResponse, type HealthResponse } from './services/api'
+import { useCatalog } from './hooks/useCatalog'
+import { navigate, pages, useLocation } from './lib/navigation'
+import { Link } from './components/Link'
+import { readFilters, filterSearch, type Filters as FilterValues } from './lib/filters'
+import { fecha, number } from './lib/format'
+import { containDialogFocus } from './lib/accessibility'
+import { descargarCSV } from './lib/export'
+import { Icon, type IconName } from './components/Icon'
+import { Badge, Button, Dialog, EmptyState, LoadingState, Metric, Panel } from './components/ui'
+import { EventTable, Magnitude } from './components/EventTable'
+import { Filters } from './components/Filters'
+import { Statistics } from './components/Statistics'
 import MapaSismico from './components/MapaSismico'
-
-type Pagina = 'dashboard' | 'eventos' | 'mapa' | 'analisis' | 'fuentes' | 'reportes' | 'modelos' | 'alertas' | 'usuarios' | 'auditoria'
-const paginas: { id: Pagina; nombre: string; icono: string; pendiente?: boolean }[] = [
-  { id: 'dashboard', nombre: 'Dashboard', icono: '▦' },
-  { id: 'eventos', nombre: 'Eventos sísmicos', icono: '◉' },
-  { id: 'mapa', nombre: 'Mapa sísmico', icono: '⌖' },
-  { id: 'analisis', nombre: 'Análisis', icono: '▥' },
-  { id: 'fuentes', nombre: 'Fuentes de datos', icono: '▧' },
-  { id: 'reportes', nombre: 'Reportes', icono: '▤' },
-  { id: 'modelos', nombre: 'Modelos de IA', icono: '⌁', pendiente: true },
-  { id: 'alertas', nombre: 'Alertas', icono: '♧', pendiente: true },
-  { id: 'usuarios', nombre: 'Usuarios y roles', icono: '♙', pendiente: true },
-  { id: 'auditoria', nombre: 'Auditoría', icono: '◷', pendiente: true },
-]
-const fecha = (value: string | null | undefined) => value
-  ? new Intl.DateTimeFormat('es-PE', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Lima' }).format(new Date(value))
-  : 'Sin sincronizaciones'
-const errorTexto = (error: unknown) => error instanceof Error ? error.message : 'No se pudo completar la consulta.'
-
-function Indicador({ titulo, valor, nota }: { titulo: string; valor: string; nota: string }) {
-  return <article className="metric-card"><p>{titulo}</p><div className="metric-value">{valor}</div><span className="metric-note">{nota}</span></article>
-}
-
-function Tabla({ eventos, compacta = false }: { eventos: EventoSismico[]; compacta?: boolean }) {
-  const [pagina, setPagina] = useState(0)
-  const paginasTotal = Math.max(1, Math.ceil(eventos.length / 20))
-  const actual = Math.min(pagina, paginasTotal - 1)
-  const visibles = compacta ? eventos.slice(0, 5) : eventos.slice(actual * 20, (actual + 1) * 20)
-  if (!eventos.length) return <div className="empty-state"><h4>No hay eventos para este filtro</h4><p>Prueba otra búsqueda o un rango de magnitud diferente.</p></div>
-  return <>
-    <div className="table-scroll"><table className="events-table"><caption className="sr-only">Eventos observados por USGS, guardados en Supabase. Fechas en hora de Perú.</caption>
-      <thead><tr><th scope="col">Fecha · Perú</th><th scope="col">Magnitud</th><th scope="col">Ubicación</th><th scope="col">Profundidad</th><th scope="col">Procedencia</th></tr></thead>
-      <tbody>{visibles.map(evento => <tr key={evento.id}>
-        <td><time dateTime={evento.ocurrido_en}>{fecha(evento.ocurrido_en)}</time></td>
-        <td><strong>{evento.magnitud?.toFixed(1) ?? 'Sin dato'}</strong><small>{evento.tipo_magnitud || ''}</small></td>
-        <td>{evento.lugar}<small>{evento.latitud.toFixed(4)}, {evento.longitud.toFixed(4)}</small></td>
-        <td>{evento.profundidad.toFixed(1)} km</td>
-        <td><a href={evento.url_fuente} target="_blank" rel="noreferrer">USGS ↗<small>{evento.id_externo}</small></a></td>
-      </tr>)}</tbody>
-    </table></div>
-    {!compacta && paginasTotal > 1 && <div className="pagination"><button className="action-button" disabled={actual === 0} onClick={() => setPagina(actual - 1)}>Anterior</button><span>Página {actual + 1} de {paginasTotal}</span><button className="action-button" disabled={actual + 1 >= paginasTotal} onClick={() => setPagina(actual + 1)}>Siguiente</button></div>}
-  </>
-}
-
-function Analisis({ eventos, corte }: { eventos: EventoSismico[]; corte: string }) {
-  const magnitudes = eventos.flatMap(e => e.magnitud === null ? [] : [e.magnitud])
-  const profundidad = eventos.length ? eventos.reduce((s, e) => s + e.profundidad, 0) / eventos.length : null
-  const rangos = [
-    { nombre: 'Menor de 4', n: magnitudes.filter(m => m < 4).length },
-    { nombre: '4 a menos de 6', n: magnitudes.filter(m => m >= 4 && m < 6).length },
-    { nombre: '6 o más', n: magnitudes.filter(m => m >= 6).length },
-  ]
-  const dias = Array.from({ length: 8 }, (_, i) => {
-    const d = new Date(new Date(corte).getTime() - (7 - i) * 86400000)
-    const key = d.toISOString().slice(0, 10)
-    return { nombre: key, n: eventos.filter(e => e.ocurrido_en.slice(0, 10) === key).length }
-  })
-  return <>
-    <section className="metrics-grid">
-      <Indicador titulo="Tamaño de muestra" valor={String(eventos.length)} nota="Mismos filtros de tabla y mapa" />
-      <Indicador titulo="Magnitud promedio" valor={magnitudes.length ? (magnitudes.reduce((s, m) => s + m, 0) / magnitudes.length).toFixed(2) : '—'} nota="Media de magnitudes reportadas" />
-      <Indicador titulo="Profundidad promedio" valor={profundidad === null ? '—' : `${profundidad.toFixed(1)} km`} nota="Según los registros seleccionados" />
-      <Indicador titulo="Magnitud sin dato" valor={String(eventos.length - magnitudes.length)} nota="Excluida del promedio y distribución" />
-    </section>
-    <section className="section-grid">
-      <article className="panel"><div className="panel-heading"><h3>Distribución por magnitud</h3></div><Barras datos={rangos} /></article>
-      <article className="panel"><div className="panel-heading"><h3>Eventos por día · UTC</h3></div><Barras datos={dias} /></article>
-    </section>
-    <p className="subtitle">Análisis descriptivo de eventos observados. Los conteos dependen de la cobertura de USGS; no representan predicciones ni niveles oficiales de peligro.</p>
-  </>
-}
-
-function Barras({ datos }: { datos: { nombre: string; n: number }[] }) {
-  const maximo = Math.max(1, ...datos.map(d => d.n))
-  return <div className="bar-chart" role="img" aria-label={datos.map(d => `${d.nombre}: ${d.n} eventos`).join('; ')}>
-    {datos.map(d => <div className="bar-row" key={d.nombre}><span>{d.nombre}</span><div className="bar-track"><div style={{ width: `${d.n / maximo * 100}%` }} /></div><strong>{d.n}</strong></div>)}
-    <p className="chart-note">Conteo de eventos · escala desde cero</p>
-  </div>
-}
-
-function descargarCSV(eventos: EventoSismico[]) {
-  const celda = (valor: unknown) => {
-    let texto = String(valor ?? '')
-    if (/^[=+\-@]/.test(texto)) texto = `'${texto}`
-    return `"${texto.replace(/"/g, '""')}"`
-  }
-  const filas = [['id', 'id_externo', 'fecha_utc', 'magnitud', 'tipo_magnitud', 'lugar', 'profundidad_km', 'latitud', 'longitud', 'fuente_url'],
-    ...eventos.map(e => [e.id, e.id_externo, e.ocurrido_en, e.magnitud, e.tipo_magnitud, e.lugar, e.profundidad, e.latitud, e.longitud, e.url_fuente])]
-  const blob = new Blob(['\uFEFF' + filas.map(f => f.map(celda).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url; link.download = `sismocore-eventos-${new Date().toISOString().slice(0, 10)}.csv`
-  link.click()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
+import type { EventoSismico } from './services/api'
 
 function App() {
-  const [pagina, setPagina] = useState<Pagina>('dashboard')
-  const [salud, setSalud] = useState<HealthResponse | null>(null)
-  const [datos, setDatos] = useState<EventosResponse | null>(null)
-  const [error, setError] = useState('')
-  const [cargando, setCargando] = useState(true)
-  const [actualizando, setActualizando] = useState(false)
-  const [busqueda, setBusqueda] = useState('')
-  const [magnitud, setMagnitud] = useState('todos')
-  const [fechaDesde, setFechaDesde] = useState('')
-  const enCurso = useRef(false)
-  const cargar = useCallback(async () => {
-    if (enCurso.current) return
-    enCurso.current = true
-    setActualizando(true)
-    try {
-      const [h, e] = await Promise.allSettled([verificarAPI(), obtenerEventos()])
-      setSalud(h.status === 'fulfilled' ? h.value : null)
-      if (e.status === 'fulfilled') {
-        setDatos(e.value)
-        setError(h.status === 'fulfilled' && h.value.base_datos !== 'conectada' ? h.value.mensaje : '')
-      } else {
-        setError(errorTexto(e.reason))
-      }
-    } finally {
-      setCargando(false)
-      setActualizando(false)
-      enCurso.current = false
-    }
-  }, [])
-  useEffect(() => {
-    void Promise.resolve().then(cargar)
-    const timer = window.setInterval(() => void cargar(), 30000)
-    return () => window.clearInterval(timer)
-  }, [cargar])
-  const eventos = (datos?.eventos ?? []).filter(e => {
-    const texto = `${e.lugar} ${e.id_externo} ${e.id}`.toLocaleLowerCase('es')
-    return texto.includes(busqueda.trim().toLocaleLowerCase('es')) &&
-      (!fechaDesde || e.ocurrido_en.slice(0, 10) >= fechaDesde) &&
-      (magnitud === 'todos' || (e.magnitud !== null && (magnitud === 'menor' ? e.magnitud < 4 : magnitud === 'medio' ? e.magnitud >= 4 && e.magnitud < 6 : e.magnitud >= 6)))
+  const { datos, salud, error, cargando, actualizando, cargar, connection } = useCatalog()
+  const { path, search, page } = useLocation()
+  const filters = readFilters(search)
+  const [selected, setSelected] = useState<EventoSismico | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [exported, setExported] = useState(false)
+  const drawer = useRef<HTMLDialogElement>(null)
+  const heading = useRef<HTMLHeadingElement>(null)
+  const previousPath = useRef(path)
+  const emptyFilters = { q: '', magnitude: 'todos', since: '' }
+  const updateFilters = (values: FilterValues) => navigate(path + filterSearch(values), true)
+  const clearFilters = () => updateFilters(emptyFilters)
+  const route = (target: string) => target + filterSearch(filters)
+  const events = (datos?.eventos ?? []).filter(event => {
+    const text = `${event.lugar} ${event.id_externo} ${event.id}`.toLocaleLowerCase('es')
+    return text.includes(filters.q.trim().toLocaleLowerCase('es')) &&
+      (!filters.since || event.ocurrido_en.slice(0, 10) >= filters.since) &&
+      (filters.magnitude === 'todos' || (event.magnitud !== null && (filters.magnitude === 'menor' ? event.magnitud < 4 : filters.magnitude === 'medio' ? event.magnitud >= 4 && event.magnitud < 6 : event.magnitud >= 6)))
   })
-  const medidas = eventos.flatMap(e => e.magnitud === null ? [] : [e.magnitud])
-  const maximo = medidas.length ? Math.max(...medidas).toFixed(1) : '—'
-  const profundidad = eventos.length ? `${(eventos.reduce((s, e) => s + e.profundidad, 0) / eventos.length).toFixed(1)} km` : '—'
-  const disponible = salud !== null
-  const titulo = paginas.find(p => p.id === pagina)?.nombre ?? 'SISMOCORE'
-  const filtrosVisibles = ['dashboard', 'eventos', 'mapa', 'analisis', 'reportes'].includes(pagina)
-  function navegar(id: Pagina) { setPagina(id); window.scrollTo({ top: 0, behavior: 'smooth' }) }
+  const magnitudes = events.flatMap(event => event.magnitud === null ? [] : [event.magnitud])
+  const max = magnitudes.length ? number(Math.max(...magnitudes)) : '—'
+  const averageDepth = events.length ? `${number(events.reduce((sum, event) => sum + event.profundidad, 0) / events.length)} km` : '—'
+  const hasFilters = Boolean(filters.q || filters.since || filters.magnitude !== 'todos')
+  const filterKey = JSON.stringify(filters)
+  const pending = page && 'pending' in page && page.pending
+  const showFilters = page && ['dashboard', 'eventos', 'mapa', 'analisis', 'reportes'].includes(page.id)
+  const initialLoading = cargando && !datos
+  const linkAction = <Link className="button button--secondary" href={route('/eventos')}>Ver catálogo<Icon name="arrow" size={16} /></Link>
+
+  useEffect(() => {
+    document.title = `${page?.heading || 'Página no encontrada'} · SISMOCORE`
+    if (previousPath.current !== path) {
+      heading.current?.focus({ preventScroll: true })
+      window.scrollTo({ top: 0, behavior: 'instant' })
+      previousPath.current = path
+    }
+  }, [page, path])
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)')
+    const closeDesktop = () => { if (media.matches) drawer.current?.close() }
+    media.addEventListener('change', closeDesktop)
+    return () => media.removeEventListener('change', closeDesktop)
+  }, [])
+
+  const navigation = (mobile = false) => <>
+    {['Monitoreo', 'Gestión'].map(group => <div className="nav-group" key={group}><p className="menu-label">{group}</p><nav aria-label={`${group}${mobile ? ' móvil' : ''}`}>{pages.filter(item => item.group === group).map(item => <Link className={`nav-item ${page?.id === item.id ? 'active' : ''}`} href={route(item.path)} key={item.id} aria-current={page?.id === item.id ? 'page' : undefined} onClick={() => { if (mobile) drawer.current?.close() }}><Icon name={item.icon} size={19} /><span>{item.title}</span>{'pending' in item && item.pending && <span className="nav-pending" aria-hidden="true">Próx.</span>}</Link>)}</nav></div>)}
+  </>
+
+  function openMenu() { drawer.current?.showModal(); setMenuOpen(true) }
+  const tableProps = { events, onDetail: setSelected, onClear: clearFilters }
+  const connectionIcon = connection.icon as IconName
 
   return <div className="app">
-    <header className="topbar">
-      <button className="brand brand-button" onClick={() => navegar('dashboard')} aria-label="Ir al dashboard"><div className="brand-icon">S</div><div><h1>SISMO<span>CORE</span></h1><p>PLATAFORMA DE MONITOREO SÍSMICO</p></div></button>
-      <div className="system-status" role="status"><span className="status-dot" style={{ backgroundColor: cargando ? '#f59e0b' : disponible ? '#22c55e' : '#ef4444' }} />{cargando ? 'Comprobando servicios…' : disponible ? salud.base_datos === 'conectada' ? 'API y Supabase conectados' : 'API disponible · revisar Supabase' : 'API no disponible'}</div>
-    </header>
-    <div className="layout">
-      <aside className="sidebar"><p className="menu-label">MONITOREO Y GESTIÓN</p><nav aria-label="Navegación principal">{paginas.map(p => <button type="button" key={p.id} title={p.nombre} className={`nav-item ${pagina === p.id ? 'active' : ''}`} onClick={() => navegar(p.id)} aria-current={pagina === p.id ? 'page' : undefined}><span aria-hidden="true">{p.icono}</span>{p.nombre}{p.pendiente && <small className="nav-pending" title="Módulo pendiente de implementación">Próx.</small>}</button>)}</nav><div className="sidebar-footer"><span className="status-dot" /><div><strong>USGS → Supabase</strong><p>Eventos observados</p></div></div></aside>
-      <main className="main-content">
-        <div className="page-heading"><div><p className="eyebrow">CENTRO DE MONITOREO</p><h2>{titulo === 'Dashboard' ? 'Dashboard sísmico' : titulo}</h2><p className="subtitle">Eventos reales de USGS · catálogo persistente en Supabase</p></div><button className="action-button" onClick={() => void cargar()} disabled={actualizando}>{actualizando ? 'Consultando…' : 'Actualizar datos'}</button></div>
-        <div className="data-context"><span>Últimos 7 días · magnitud de origen ≥ 2.5 · área alrededor del Perú</span><span>Última sincronización: {fecha(datos?.ultima_sincronizacion)} · hora de Perú</span></div>
-        {error && <div className="service-message error-message" role="alert"><strong>No se pudo actualizar la información.</strong><p>{error}</p>{datos && <p>Se conserva la última consulta disponible; sus datos pueden estar desactualizados.</p>}<button className="action-button" onClick={() => void cargar()}>Reintentar conexión</button></div>}
-        {filtrosVisibles && <div className="filter-bar shared-filters"><label>Buscar ubicación o ID<input className="filter-control" value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Ej. Perú, costa, identificador" /></label><label>Magnitud<select className="filter-control" value={magnitud} onChange={e => setMagnitud(e.target.value)}><option value="todos">Todas</option><option value="menor">Menor de 4</option><option value="medio">4 a menos de 6</option><option value="mayor">6 o más</option></select></label><label>Desde · fecha UTC<input type="date" className="filter-control" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} /></label><button className="action-button" onClick={() => { setBusqueda(''); setMagnitud('todos'); setFechaDesde('') }}>Limpiar filtros</button></div>}
-        {cargando ? <section className="panel empty-state" role="status"><h3>Consultando el catálogo…</h3><p>Comprobando API y base de datos.</p></section> : <>
-          {datos && datos.total === 0 && <div className="service-message" role="status">{datos.sincronizacion === 'sincronizando' ? 'La primera sincronización está en curso. Esta pantalla se actualizará automáticamente.' : 'No hay eventos guardados dentro de los últimos siete días.'}{datos.ultima_ejecucion?.error_resumen && <p>{datos.ultima_ejecucion.error_resumen}</p>}</div>}
-          {pagina === 'dashboard' && <>
-            <section className="metrics-grid"><Indicador titulo="Eventos del filtro" valor={datos ? String(eventos.length) : '—'} nota="Observaciones guardadas" /><Indicador titulo="Magnitud máxima" valor={maximo} nota="Del mismo conjunto filtrado" /><Indicador titulo="Profundidad promedio" valor={profundidad} nota="Kilómetros reportados por USGS" /><Indicador titulo="Base de datos" valor={salud?.base_datos === 'conectada' ? 'Conectada' : 'Sin conexión'} nota="Supabase PostgreSQL" /></section>
-            <section className="panel"><div className="panel-heading"><div><h3>Eventos más recientes</h3><p>Fecha local, magnitud y enlace de procedencia.</p></div><button className="action-button" onClick={() => navegar('eventos')}>Ver catálogo</button></div><Tabla eventos={eventos} compacta /></section>
-            <section className="panel monitoring-panel"><div className="panel-heading"><h3>Ubicación de eventos observados</h3><span className="panel-tag">{eventos.length} EVENTOS</span></div>{eventos.length ? <MapaSismico eventos={eventos} /> : <p className="subtitle">El mapa mostrará los eventos cuando la sincronización termine o cambies los filtros.</p>}</section>
-          </>}
-          {pagina === 'eventos' && <section className="panel"><div className="panel-heading"><h3>Catálogo de eventos</h3><span className="panel-tag">{eventos.length} / {datos?.total ?? 0}</span></div><Tabla eventos={eventos} /></section>}
-          {pagina === 'mapa' && <section className="panel"><div className="panel-heading"><h3>Mapa de epicentros</h3><span className="panel-tag">{eventos.length} EVENTOS</span></div>{eventos.length ? <MapaSismico eventos={eventos} /> : <div className="empty-state"><h4>Sin eventos para este filtro</h4><p>Comprueba los filtros y el estado de sincronización.</p></div>}</section>}
-          {pagina === 'analisis' && datos && <Analisis eventos={eventos} corte={datos.consultado_en} />}
-          {pagina === 'fuentes' && <>
-            <section className="metrics-grid"><Indicador titulo="Fuente de observaciones" valor="USGS" nota="Earthquake Hazards Program" /><Indicador titulo="Registros en el periodo" valor={datos ? String(datos.total) : '—'} nota="Últimos siete días guardados" /><Indicador titulo="Sincronización" valor={datos?.sincronizacion ?? 'Sin conexión'} nota="Consulta automática cada cinco minutos" /><Indicador titulo="Últimos rechazos" valor={datos?.ultima_ejecucion ? String(datos.ultima_ejecucion.registros_rechazados) : '—'} nota="Registros inválidos descartados" /></section>
-            <section className="panel"><div className="panel-heading"><h3>Estado del conector</h3></div><dl className="source-details"><dt>Base de datos</dt><dd>{salud?.base_datos === 'conectada' ? 'Supabase conectada' : 'No disponible'}</dd><dt>Último éxito</dt><dd>{fecha(datos?.ultima_sincronizacion)}</dd><dt>Última ejecución</dt><dd>{datos?.ultima_ejecucion?.estado ?? 'Sin ejecuciones'}</dd><dt>Registros recibidos</dt><dd>{datos?.ultima_ejecucion?.registros_recibidos ?? '—'}</dd><dt>Insertados / actualizados</dt><dd>{datos?.ultima_ejecucion ? `${datos.ultima_ejecucion.registros_insertados} / ${datos.ultima_ejecucion.registros_actualizados}` : '—'}</dd></dl><p className="subtitle">Cobertura rectangular alrededor del Perú; no equivale a todos los registros de IGP ni a una delimitación administrativa. <a href="https://earthquake.usgs.gov/earthquakes/" target="_blank" rel="noreferrer">Consultar USGS ↗</a></p>{datos?.ultima_ejecucion?.error_resumen && <p role="alert">{datos.ultima_ejecucion.error_resumen}</p>}</section>
-          </>}
-          {pagina === 'reportes' && <section className="panel"><div className="panel-heading"><h3>Exportación de eventos</h3><span className="panel-tag">CSV</span></div><p className="subtitle">Descarga las {eventos.length} observaciones de los filtros actuales. Incluye fecha UTC, identificadores, ubicación, magnitud, profundidad y URL original.</p><button className="action-button export-button" disabled={!eventos.length} onClick={() => descargarCSV(eventos)}>Descargar eventos CSV</button><p className="chart-note">Los reportes empresariales PDF/XLSX con historial y solicitante requieren el módulo de identidad y reportes.</p></section>}
-          {['modelos', 'alertas', 'usuarios', 'auditoria'].includes(pagina) && <section className="panel empty-state"><span className="panel-tag">PENDIENTE DE IMPLEMENTACIÓN</span><h3>{titulo}</h3><p>{pagina === 'modelos' ? 'El monitoreo ya está conectado. Todavía no hay entrenamiento, evaluación ni modelos de ML implementados.' : pagina === 'alertas' ? 'Todavía no está implementado el motor de reglas ni el envío de notificaciones. No se están emitiendo alertas.' : 'Este módulo requiere autenticación y permisos antes de consultar o modificar información administrativa.'}</p><button className="action-button" onClick={() => navegar('dashboard')}>Volver al monitoreo</button></section>}
-        </>}
-        <footer className="page-footer"><span>SISMOCORE · eventos observados</span><span>Fuente: USGS · almacenamiento: Supabase · consulta automática cada 30 s</span></footer>
-      </main>
-    </div>
+    <a className="skip-link" href="#contenido">Saltar al contenido</a>
+    <header className="topbar"><div className="topbar-brand"><Button variant="ghost" icon="menu" className="menu-toggle icon-button" aria-label="Abrir menú de navegación" aria-controls="mobile-menu" aria-expanded={menuOpen} onClick={openMenu} /><Link className="brand" href={route('/')} title="Ir al dashboard"><span className="brand-icon"><Icon name="wave" size={26} /></span><span><span className="brand-name">SISMO<span>CORE</span></span><span className="brand-caption">MONITOREO SÍSMICO</span></span></Link></div><div className="topbar-right"><span className="topbar-description">Observaciones, análisis y seguimiento</span><div className="system-status" role="status" aria-label={connection.label}><Badge tone={connection.tone} icon={connectionIcon}><span className="status-full">{connection.label}</span><span className="status-short" aria-hidden="true">{connection.short}</span></Badge></div></div></header>
+    <aside className="sidebar" aria-label="Menú lateral">{navigation()}<div className="sidebar-footer"><span className="source-mark"><Icon name="source" size={18} /></span><div><strong>Catálogo de observaciones</strong><p>USGS · Supabase</p></div></div></aside>
+    <dialog className="mobile-drawer" id="mobile-menu" ref={drawer} aria-labelledby="mobile-menu-title" onKeyDown={containDialogFocus} onClose={() => setMenuOpen(false)} onClick={event => { if (event.target === event.currentTarget) drawer.current?.close() }}><div className="drawer-shell"><div className="drawer-header"><h2 id="mobile-menu-title">Navegación</h2><Button variant="ghost" icon="close" className="icon-button" aria-label="Cerrar menú" onClick={() => drawer.current?.close()} /></div>{navigation(true)}<p className="drawer-note">Fuente de datos: USGS<br />Almacenamiento: Supabase</p></div></dialog>
+    <main className="main-content" id="contenido" tabIndex={-1}>
+      <div className="page-heading"><div><p className="eyebrow">{page?.group || 'NAVEGACIÓN'}<span className="eyebrow-separator">/</span>SISMOCORE</p><h1 ref={heading} tabIndex={-1}>{page?.heading || 'Página no encontrada'}</h1><p className="subtitle">{page?.description || 'La dirección no corresponde a un módulo de la plataforma.'}</p></div>{page && !pending && <Button variant="primary" icon="refresh" onClick={() => void cargar()} loading={actualizando}>{actualizando ? 'Consultando…' : 'Actualizar datos'}</Button>}</div>
+      {page && !pending && <div className="data-context"><div className="coverage"><span className="context-icon"><Icon name="map" size={19} /></span><div><strong>Cobertura del catálogo</strong><p>Últimos 7 días <span>·</span> Magnitud ≥ 2.5 <span>·</span> Perú y alrededores</p></div></div><div className="sync-context"><Icon name="clock" size={16} /><span>Última sincronización<strong>{fecha(datos?.ultima_sincronizacion)} <span>· Perú</span></strong></span></div></div>}
+      {error && page && !pending && <section className={`service-message ${datos ? 'service-message--warning' : 'service-message--danger'}`} role="alert"><Icon name={datos ? 'info' : 'alert'} size={21} /><div><strong>{datos ? 'Mostrando la última consulta disponible' : 'No se pudo actualizar la información'}</strong><p>{error}</p>{datos && <p>Se conserva la última consulta disponible; sus datos pueden estar desactualizados.</p>}</div><Button variant="secondary" icon="refresh" onClick={() => void cargar()} loading={actualizando}>Reintentar conexión</Button></section>}
+      {showFilters && <Filters values={filters} onChange={updateFilters} onClear={clearFilters} filtered={events.length} total={datos?.total ?? 0} cutoff={datos?.consultado_en} />}
+      {!page ? <Panel title="Esta página no está disponible"><EmptyState icon="map" title="Volvamos al monitoreo" description="Puedes abrir un módulo desde el menú o regresar al dashboard." action={<Link className="button button--primary" href="/">Ir al dashboard<Icon name="arrow" size={16} /></Link>} /></Panel>
+        : pending ? <section className="pending-panel"><div className="pending-illustration"><Icon name={page.icon} size={34} /></div><Badge tone="neutral" icon="clock">{'phase' in page ? page.phase : ''} · En preparación</Badge><h2>{page.title}</h2><p>{page.id === 'modelos' ? 'Aquí se incorporarán los experimentos, entrenamientos y métricas de evaluación. Todavía no hay modelos ni estimaciones implementados.' : page.id === 'alertas' ? 'Este módulo incorporará reglas, aprobaciones y seguimiento de entregas. Actualmente no se están emitiendo alertas.' : 'Este módulo se habilitará junto con el inicio de sesión y los permisos de acceso. La información administrativa permanecerá protegida.'}</p><div className="pending-actions"><Link className="button button--primary" href={route('/')}>Volver al monitoreo<Icon name="arrow" size={16} /></Link></div><span className="pending-footnote">El catálogo, el mapa y las exportaciones ya están disponibles.</span></section>
+          : initialLoading ? <LoadingState />
+            : !datos ? <Panel title="Catálogo no disponible"><EmptyState icon="database" title="Estamos intentando recuperar la conexión" description="Todavía no hay una consulta disponible en este navegador. La pantalla volverá a intentarlo automáticamente." action={<Button icon="refresh" onClick={() => void cargar()} loading={actualizando}>Volver a intentar</Button>} /></Panel>
+              : <>
+                {datos.total === 0 && <div className="service-message service-message--info" role="status"><Icon name="info" /><div><strong>{datos.sincronizacion === 'sincronizando' ? 'Sincronización en curso' : 'Sin observaciones en el periodo'}</strong><p>{datos.sincronizacion === 'sincronizando' ? 'Los primeros registros aparecerán automáticamente al finalizar la consulta.' : 'La fuente no tiene eventos guardados dentro de la cobertura y el periodo actuales.'}</p>{datos.ultima_ejecucion?.error_resumen && <p>{datos.ultima_ejecucion.error_resumen}</p>}</div></div>}
+                {page.id === 'dashboard' && <>
+                  <div className="metrics-grid"><Metric title="Eventos del filtro" value={String(events.length)} note="Observaciones guardadas" icon="event" accent /><Metric title="Magnitud máxima" value={max} note="Del mismo conjunto seleccionado" icon="wave" /><Metric title="Profundidad promedio" value={averageDepth} note="Kilómetros reportados por la fuente" icon="depth" /><Metric title="Base de datos" value={salud ? salud.base_datos === 'conectada' ? 'Conectada' : 'Sin conexión' : 'Sin verificar'} note="Persistencia en Supabase" icon="database" /></div>
+                  <Panel title="Eventos más recientes" description="Hora de Perú, magnitud y procedencia original." action={linkAction}><EventTable {...tableProps} compact key={filterKey} /></Panel>
+                  <Panel title="Ubicación de eventos observados" description="Epicentros del mismo catálogo filtrado." action={<Link className="button button--ghost" href={route('/mapa')}>Explorar mapa<Icon name="arrow" size={16} /></Link>}>{events.length ? <MapaSismico eventos={events} /> : <EmptyState icon="map" title="No hay puntos para mostrar" description="Cambia los filtros o espera a que termine la sincronización." action={hasFilters && <Button onClick={clearFilters}>Restablecer filtros</Button>} />}</Panel>
+                </>}
+                {page.id === 'eventos' && <Panel title="Catálogo de eventos" description="Consulta cada observación y su fuente original." action={<Badge tone="info">{events.length} eventos</Badge>}><EventTable {...tableProps} key={filterKey} /></Panel>}
+                {page.id === 'mapa' && <><Panel title="Mapa de epicentros" description="Ubicación geográfica de las observaciones seleccionadas." action={<Badge tone="info">{events.length} eventos</Badge>}>{events.length ? <MapaSismico eventos={events} /> : <EmptyState icon="map" title="Sin eventos para este filtro" description="No se encontraron observaciones con las condiciones seleccionadas." action={<Button onClick={clearFilters}>Restablecer filtros</Button>} />}</Panel><Panel title="Observaciones del mapa" description="Alternativa de consulta por teclado y detalle de cada registro."><EventTable {...tableProps} key={filterKey} /></Panel></>}
+                {page.id === 'analisis' && (events.length ? <Statistics events={events} cutoff={datos.consultado_en} /> : <Panel title="Análisis descriptivo"><EmptyState icon="chart" title="Sin muestra para analizar" description="Restablece los filtros para visualizar las observaciones disponibles." action={<Button onClick={clearFilters}>Restablecer filtros</Button>} /></Panel>)}
+                {page.id === 'fuentes' && <><div className="metrics-grid"><Metric title="Fuente de observaciones" value="USGS" note="Earthquake Hazards Program" icon="source" accent /><Metric title="Registros en el periodo" value={String(datos.total)} note="Últimos siete días guardados" icon="event" /><Metric title="Última ejecución" value={datos.ultima_ejecucion?.estado === 'completada' ? 'Completada' : datos.ultima_ejecucion?.estado === 'fallida' ? 'Con errores' : datos.ultima_ejecucion ? 'En proceso' : 'Pendiente'} note="Historial de sincronización" icon="refresh" /><Metric title="Últimos rechazos" value={datos.ultima_ejecucion ? String(datos.ultima_ejecucion.registros_rechazados) : '—'} note="Registros inválidos descartados" icon="audit" /></div><Panel title="Conector USGS" description="Estado y procedencia de la información recibida." action={<Badge tone={salud?.base_datos === 'conectada' ? 'success' : 'warning'} icon={salud?.base_datos === 'conectada' ? 'check' : 'info'}>{salud?.base_datos === 'conectada' ? 'Supabase conectada' : 'Estado sin confirmar'}</Badge>}><dl className="source-details"><div><dt>Último éxito · hora de Perú</dt><dd>{fecha(datos.ultima_sincronizacion)}</dd></div><div><dt>Frecuencia configurada</dt><dd>Cada cinco minutos</dd></div><div><dt>Última ejecución</dt><dd>{datos.ultima_ejecucion?.estado || 'Sin ejecuciones'}</dd></div><div><dt>Registros recibidos</dt><dd>{datos.ultima_ejecucion?.registros_recibidos ?? '—'}</dd></div><div><dt>Insertados / actualizados</dt><dd>{datos.ultima_ejecucion ? `${datos.ultima_ejecucion.registros_insertados} / ${datos.ultima_ejecucion.registros_actualizados}` : '—'}</dd></div><div><dt>Almacenamiento</dt><dd>Supabase PostgreSQL</dd></div></dl><div className="information-note"><Icon name="info" /><p>La cobertura es un rectángulo alrededor del Perú y puede incluir países vecinos. No equivale a todo el catálogo del IGP. <a href="https://earthquake.usgs.gov/earthquakes/" target="_blank" rel="noreferrer">Consultar USGS<Icon name="external" size={13} /></a></p></div>{datos.ultima_ejecucion?.error_resumen && <p className="inline-error">{datos.ultima_ejecucion.error_resumen}</p>}</Panel></>}
+                {page.id === 'reportes' && <Panel title="Exportación del catálogo" description="Descarga las observaciones de tus filtros actuales." action={<Badge tone="info">CSV disponible</Badge>}><div className="export-card"><span className="export-icon"><Icon name="report" size={32} /></span><div><h3>Eventos sísmicos · CSV</h3><p>{events.length} observaciones con fecha UTC, ubicación, magnitud, profundidad e identificadores.</p><div className="export-tags"><Badge>Fuente: USGS</Badge><Badge>Consulta filtrada</Badge><Badge>Enlaces de procedencia</Badge></div></div><Button variant="primary" icon="download" disabled={!events.length} onClick={() => { descargarCSV(events); setExported(true) }}>Descargar eventos CSV</Button></div>{exported && <p className="export-success" role="status"><Icon name="check" size={17} />Exportación preparada. Tu navegador gestiona la descarga del archivo.</p>}<div className="information-note"><Icon name="info" /><p>Los informes PDF/XLSX con historial y solicitante se incorporarán en la fase de reportes. La exportación CSV actual ya está disponible.</p></div></Panel>}
+              </>}
+      <footer className="page-footer"><span><Icon name="wave" size={15} />SISMOCORE · eventos observados</span><span>USGS · Supabase <span className="footer-separator">/</span> Consulta cada 30 s</span></footer>
+    </main>
+    <Dialog open={selected !== null} title={selected?.lugar || 'Detalle del evento'} description="Observación reportada por USGS. No representa una predicción ni una alerta oficial." onClose={() => setSelected(null)}>{selected && <><div className="detail-summary"><Magnitude value={selected.magnitud} type={selected.tipo_magnitud} /><span><Icon name="clock" size={17} />{fecha(selected.ocurrido_en)} · Perú</span></div><dl className="source-details event-details"><div><dt>Profundidad</dt><dd>{number(selected.profundidad)} km</dd></div><div><dt>Latitud / longitud</dt><dd>{number(selected.latitud, 4)}, {number(selected.longitud, 4)}</dd></div><div><dt>Fecha UTC</dt><dd>{new Date(selected.ocurrido_en).toLocaleString('es-PE', { timeZone: 'UTC' })}</dd></div><div><dt>Identificador de origen</dt><dd>{selected.id_externo}</dd></div><div><dt>Estado de revisión</dt><dd>{selected.estado_revision === 'reviewed' ? 'Revisado por la fuente' : selected.estado_revision}</dd></div><div><dt>Proveedor</dt><dd>USGS</dd></div></dl><a className="button button--primary detail-source" href={selected.url_fuente} target="_blank" rel="noreferrer">Ver evento original en USGS<Icon name="external" size={16} /></a></>}</Dialog>
   </div>
 }
 
