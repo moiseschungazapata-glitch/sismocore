@@ -168,6 +168,25 @@ class APITests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers['access-control-allow-origin'], 'http://localhost:5173')
 
+    async def test_catalog_accepts_both_paths_without_redirects(self):
+        with patch('app.api.routes.eventos.catalog.read', return_value={'total': 0, 'eventos': []}):
+            async with CLIENT(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+                for path in ['/api/v1/eventos', '/api/v1/eventos/']:
+                    with self.subTest(path=path):
+                        response = await client.get(path)
+                        self.assertEqual(response.status_code, 200)
+                        self.assertNotIn('location', response.headers)
+                        self.assertEqual(response.json(), {'total': 0, 'eventos': []})
+
+    async def test_both_catalog_paths_require_authentication(self):
+        app.dependency_overrides.clear()
+        async with CLIENT(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+            for path in ['/api/v1/eventos', '/api/v1/eventos/']:
+                with self.subTest(path=path):
+                    response = await client.get(path)
+                    self.assertEqual(response.status_code, 401)
+                    self.assertEqual(response.headers['content-type'], 'application/json')
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -86,6 +86,9 @@ async function request<T>(path: string): Promise<T> {
       } catch { /* A development proxy can return a plain text 502. */ }
       throw new Error(message)
     }
+    if (!response.headers.get('content-type')?.includes('application/json')) {
+      throw new Error('La consulta recibió una página web en lugar de datos. Revisa las rutas de la API en el despliegue.')
+    }
     return await response.json() as T
   } catch (error) {
     if (error instanceof TypeError || (error instanceof DOMException && error.name === 'TimeoutError')) {
@@ -98,7 +101,7 @@ async function request<T>(path: string): Promise<T> {
 export const verificarAPI = () => request<HealthResponse>('/health')
 export async function obtenerEventos(): Promise<EventosResponse> {
   const generation = privateCacheGeneration()
-  const datos = await request<EventosResponse>('/api/v1/eventos/')
+  const datos = await request<EventosResponse>('/api/v1/eventos')
   // A response started before logout must never restore the cleared private cache.
   if (generation === privateCacheGeneration()) {
     try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(datos)) } catch { /* Storage can be disabled or full. */ }
