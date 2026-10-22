@@ -6,7 +6,7 @@ import { Link } from './components/Link'
 import { readFilters, filterSearch, type Filters as FilterValues } from './lib/filters'
 import { fecha, number } from './lib/format'
 import { containDialogFocus } from './lib/accessibility'
-import { descargarCSV } from './lib/export'
+import { descargarReporte } from './lib/export'
 import { Icon, type IconName } from './components/Icon'
 import { Badge, Button, Dialog, EmptyState, LoadingState, Metric, Panel } from './components/ui'
 import { EventTable, Magnitude } from './components/EventTable'
@@ -24,6 +24,8 @@ function Monitoring({ user, onLogout }: { user: AuthUser; onLogout: () => Promis
   const [selected, setSelected] = useState<EventoSismico | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [exported, setExported] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
   const [signingOut, setSigningOut] = useState(false)
   const drawer = useRef<HTMLDialogElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
@@ -67,6 +69,21 @@ function Monitoring({ user, onLogout }: { user: AuthUser; onLogout: () => Promis
     {['Monitoreo', 'Gestión'].map(group => <div className="nav-group" key={group}><p className="menu-label">{group}</p><nav aria-label={`${group}${mobile ? ' móvil' : ''}`}>{pages.filter(item => item.group === group).map(item => <Link className={`nav-item ${page?.id === item.id ? 'active' : ''}`} href={route(item.path)} key={item.id} aria-current={page?.id === item.id ? 'page' : undefined} onClick={() => { if (mobile) drawer.current?.close() }}><Icon name={item.icon} size={19} /><span>{item.title}</span>{'pending' in item && item.pending && <span className="nav-pending" aria-hidden="true">Próx.</span>}</Link>)}</nav></div>)}
   </>
 
+  async function downloadReport() {
+    if (exporting) return
+    setExporting(true)
+    setExported(false)
+    setExportError('')
+    try {
+      await descargarReporte(events, { filters, lastSync: datos?.ultima_sincronizacion })
+      setExported(true)
+    } catch {
+      setExportError('No se pudo preparar el reporte. Vuelve a intentarlo.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   function openMenu() { drawer.current?.showModal(); setMenuOpen(true) }
   const tableProps = { events, onDetail: setSelected, onClear: clearFilters }
   const connectionIcon = connection.icon as IconName
@@ -96,7 +113,7 @@ function Monitoring({ user, onLogout }: { user: AuthUser; onLogout: () => Promis
                 {page.id === 'mapa' && <><Panel title="Mapa de epicentros" description="Ubicación geográfica de las observaciones seleccionadas." action={<Badge tone="info">{events.length} eventos</Badge>}>{events.length ? <MapaSismico eventos={events} /> : <EmptyState icon="map" title="Sin eventos para este filtro" description="No se encontraron observaciones con las condiciones seleccionadas." action={<Button onClick={clearFilters}>Restablecer filtros</Button>} />}</Panel><Panel title="Observaciones del mapa" description="Alternativa de consulta por teclado y detalle de cada registro."><EventTable {...tableProps} key={filterKey} /></Panel></>}
                 {page.id === 'analisis' && (events.length ? <Statistics events={events} cutoff={datos.consultado_en} /> : <Panel title="Análisis descriptivo"><EmptyState icon="chart" title="Sin muestra para analizar" description="Restablece los filtros para visualizar las observaciones disponibles." action={<Button onClick={clearFilters}>Restablecer filtros</Button>} /></Panel>)}
                 {page.id === 'fuentes' && <><div className="metrics-grid"><Metric title="Fuente de observaciones" value="USGS" note="Earthquake Hazards Program" icon="source" accent /><Metric title="Registros en el periodo" value={String(datos.total)} note="Últimos siete días guardados" icon="event" /><Metric title="Última ejecución" value={datos.ultima_ejecucion?.estado === 'completada' ? 'Completada' : datos.ultima_ejecucion?.estado === 'fallida' ? 'Con errores' : datos.ultima_ejecucion ? 'En proceso' : 'Pendiente'} note="Historial de sincronización" icon="refresh" /><Metric title="Últimos rechazos" value={datos.ultima_ejecucion ? String(datos.ultima_ejecucion.registros_rechazados) : '—'} note="Registros inválidos descartados" icon="audit" /></div><Panel title="Conector USGS" description="Estado y procedencia de la información recibida." action={<Badge tone={salud?.base_datos === 'conectada' ? 'success' : 'warning'} icon={salud?.base_datos === 'conectada' ? 'check' : 'info'}>{salud?.base_datos === 'conectada' ? 'Supabase conectada' : 'Estado sin confirmar'}</Badge>}><dl className="source-details"><div><dt>Último éxito · hora de Perú</dt><dd>{fecha(datos.ultima_sincronizacion)}</dd></div><div><dt>Frecuencia configurada</dt><dd>Cada cinco minutos</dd></div><div><dt>Última ejecución</dt><dd>{datos.ultima_ejecucion?.estado || 'Sin ejecuciones'}</dd></div><div><dt>Registros recibidos</dt><dd>{datos.ultima_ejecucion?.registros_recibidos ?? '—'}</dd></div><div><dt>Insertados / actualizados</dt><dd>{datos.ultima_ejecucion ? `${datos.ultima_ejecucion.registros_insertados} / ${datos.ultima_ejecucion.registros_actualizados}` : '—'}</dd></div><div><dt>Almacenamiento</dt><dd>Supabase PostgreSQL</dd></div></dl><div className="information-note"><Icon name="info" /><p>La cobertura es un rectángulo alrededor del Perú y puede incluir países vecinos. No equivale a todo el catálogo del IGP. <a href="https://earthquake.usgs.gov/earthquakes/" target="_blank" rel="noreferrer">Consultar USGS<Icon name="external" size={13} /></a></p></div>{datos.ultima_ejecucion?.error_resumen && <p className="inline-error">{datos.ultima_ejecucion.error_resumen}</p>}</Panel></>}
-                {page.id === 'reportes' && <Panel title="Exportación del catálogo" description="Descarga las observaciones de tus filtros actuales." action={<Badge tone="info">CSV disponible</Badge>}><div className="export-card"><span className="export-icon"><Icon name="report" size={32} /></span><div><h3>Eventos sísmicos · CSV</h3><p>{events.length} observaciones con fecha UTC, ubicación, magnitud, profundidad e identificadores.</p><div className="export-tags"><Badge>Fuente: USGS</Badge><Badge>Consulta filtrada</Badge><Badge>Enlaces de procedencia</Badge></div></div><Button variant="primary" icon="download" disabled={!events.length} onClick={() => { descargarCSV(events); setExported(true) }}>Descargar eventos CSV</Button></div>{exported && <p className="export-success" role="status"><Icon name="check" size={17} />Exportación preparada. Tu navegador gestiona la descarga del archivo.</p>}<div className="information-note"><Icon name="info" /><p>Los informes PDF/XLSX con historial y solicitante se incorporarán en la fase de reportes. La exportación CSV actual ya está disponible.</p></div></Panel>}
+                {page.id === 'reportes' && <Panel title="Reporte del catálogo" description="Descarga las observaciones de tus filtros actuales." action={<Badge tone="info">Reporte disponible</Badge>}><div className="export-card"><span className="export-icon"><Icon name="report" size={32} /></span><div><h3>Reporte de eventos sísmicos</h3><p>{events.length} observaciones con fecha, ubicación, magnitud, profundidad y fuente. Incluye resumen y filtros aplicados.</p><div className="export-tags"><Badge>Fuente: USGS</Badge><Badge>Consulta filtrada</Badge><Badge>Enlaces de procedencia</Badge></div></div><Button variant="primary" icon="download" disabled={!events.length || exporting} loading={exporting} onClick={() => void downloadReport()}>Descargar reporte</Button></div>{exported && <p className="export-success" role="status"><Icon name="check" size={17} />Reporte preparado. Tu navegador gestiona la descarga del archivo.</p>}{exportError && <p className="inline-error" role="alert">{exportError}</p>}<div className="information-note"><Icon name="info" /><p>El reporte se abre en Excel con columnas organizadas, filtros y encabezados fijos. Las fechas incluyen hora de Perú y UTC.</p></div></Panel>}
               </>}
       <footer className="page-footer"><span><Icon name="wave" size={15} />SISMOCORE · eventos observados</span><span>USGS · Supabase <span className="footer-separator">/</span> Consulta cada 30 s</span></footer>
     </main>

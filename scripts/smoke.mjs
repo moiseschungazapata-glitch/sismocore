@@ -1,8 +1,9 @@
 // Optional browser check: install Playwright separately, or set PLAYWRIGHT_MODULE.
-import { mkdir, readFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { root } from './runtime.mjs';
+import ExcelJS from '../apps/web/node_modules/exceljs/excel.js';
 import { testAuthState } from './test-auth-state.mjs';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ? pathToFileURL(process.env.PLAYWRIGHT_MODULE).href : 'playwright');
@@ -38,12 +39,14 @@ try {
   await page.getByText('Supabase conectada', { exact: true }).waitFor();
   await page.getByRole('link', { name: 'Reportes', exact: true }).click();
   const pending = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Descargar eventos CSV', exact: true }).click();
+  await page.getByRole('button', { name: 'Descargar reporte', exact: true }).click();
   const download = await pending;
-  const file = join(root, '.runtime/eventos-prueba.csv');
+  const file = join(root, '.runtime/reporte-prueba.xlsx');
   await download.saveAs(file);
-  const csv = await readFile(file, 'utf8');
-  if (!csv.includes(data.eventos[0].id_externo) || !csv.includes('fecha_utc')) throw new Error('CSV incompleto.');
+  const report = new ExcelJS.Workbook();
+  await report.xlsx.readFile(file);
+  const sheet = report.getWorksheet('Eventos sísmicos');
+  if (sheet.getCell('I10').value !== data.eventos[0].id_externo || sheet.getCell('J9').value !== 'Fecha y hora · UTC') throw new Error('Reporte incompleto.');
   await page.getByRole('link', { name: 'Dashboard', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(400);
@@ -57,7 +60,7 @@ try {
   if (!markersVisible) throw new Error('Los marcadores quedan fuera del mapa al cambiar a móvil.');
   await page.screenshot({ path: join(root, '.runtime/movil.png'), fullPage: true });
   if (errors.length) throw new Error(errors.join('\n'));
-  console.log(JSON.stringify({ api: 'conectada', supabase: 'conectada', eventos: data.total, tabla: 'correcta', mapa: 'correcto', teselas_cargadas: tiles, filtros_compartidos: 'correctos', analisis: 'correcto', csv: 'correcto', errores_javascript: errors.length }));
+  console.log(JSON.stringify({ api: 'conectada', supabase: 'conectada', eventos: data.total, tabla: 'correcta', mapa: 'correcto', teselas_cargadas: tiles, filtros_compartidos: 'correctos', analisis: 'correcto', reporte: 'correcto', errores_javascript: errors.length }));
 } finally {
   await browser.close();
 }
