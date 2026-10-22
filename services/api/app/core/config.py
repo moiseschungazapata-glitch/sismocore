@@ -16,6 +16,7 @@ class Settings:
     SUPABASE_SECRET_KEY = os.getenv('SUPABASE_SECRET_KEY', '')
     SYNC_INTERVAL_SECONDS = max(60, int(os.getenv('SYNC_INTERVAL_SECONDS', '300')))
     CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173').split(',')
+    AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', 'true').lower() == 'true'
 
     @property
     def database_configured(self):

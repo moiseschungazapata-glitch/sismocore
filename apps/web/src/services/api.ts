@@ -1,3 +1,5 @@
+import { clearPrivateCache, privateCacheGeneration } from './auth'
+
 const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 
 export interface HealthResponse {
@@ -68,8 +70,13 @@ export function recuperarCatalogo(): EventosResponse | null {
 
 async function request<T>(path: string): Promise<T> {
   try {
-    const response = await fetch(`${API_URL}${path}`, { signal: AbortSignal.timeout(20000) })
+    const response = await fetch(`${API_URL}${path}`, { signal: AbortSignal.timeout(20000), credentials: 'include' })
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        clearPrivateCache()
+        window.dispatchEvent(new Event('sismocore:session-ended'))
+        throw new Error('Tu sesión ha terminado o ya no tiene acceso. Vuelve a iniciar sesión.')
+      }
       let message = response.status === 502 || response.status === 504
         ? 'La API local se está recuperando. La conexión se reintentará automáticamente.'
         : `El servicio devolvió un error (${response.status}).`
@@ -90,7 +97,11 @@ async function request<T>(path: string): Promise<T> {
 
 export const verificarAPI = () => request<HealthResponse>('/health')
 export async function obtenerEventos(): Promise<EventosResponse> {
+  const generation = privateCacheGeneration()
   const datos = await request<EventosResponse>('/api/v1/eventos/')
-  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(datos)) } catch { /* Storage can be disabled or full. */ }
+  // A response started before logout must never restore the cleared private cache.
+  if (generation === privateCacheGeneration()) {
+    try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(datos)) } catch { /* Storage can be disabled or full. */ }
+  }
   return datos
 }

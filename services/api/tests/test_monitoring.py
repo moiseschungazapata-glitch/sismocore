@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.services.ingestion import Ingestion, normalize
 from app.services.database import DatabaseError
 from main import app
+from app.services.auth import require_user
 
 CLIENT = httpx.AsyncClient
 
@@ -140,6 +141,12 @@ class IngestionTests(unittest.IsolatedAsyncioTestCase):
 
 
 class APITests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        app.dependency_overrides[require_user] = lambda: {'id': 'test-user', 'rol': 'lectura'}
+
+    async def asyncTearDown(self):
+        app.dependency_overrides.clear()
+
     async def test_health_checks_database(self):
         with patch('app.api.routes.health.database.request', side_effect=DatabaseError()):
             async with CLIENT(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:

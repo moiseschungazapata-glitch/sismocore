@@ -4,13 +4,14 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { root, venvPython } from './runtime.mjs';
+import { testAuthState } from './test-auth-state.mjs';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ? pathToFileURL(process.env.PLAYWRIGHT_MODULE).href : 'playwright');
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const errors = [];
 try {
-  const page = await browser.newPage({ viewport: { width: 1365, height: 768 } });
+  const page = await browser.newPage({ viewport: { width: 1365, height: 768 }, storageState: testAuthState() });
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('http://localhost:5173', { waitUntil: 'networkidle' });
   await page.getByText('API y Supabase conectados', { exact: true }).waitFor({ timeout: 30000 });

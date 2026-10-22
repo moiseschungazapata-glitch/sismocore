@@ -1,6 +1,10 @@
-export type IconName = 'wave' | 'dashboard' | 'event' | 'map' | 'chart' | 'source' | 'report' | 'model' | 'alert' | 'users' | 'audit' | 'menu' | 'close' | 'refresh' | 'search' | 'filter' | 'arrow' | 'external' | 'check' | 'info' | 'clock' | 'database' | 'download' | 'chevron' | 'depth' | 'eye'
+export type IconName = 'wave' | 'dashboard' | 'event' | 'map' | 'chart' | 'source' | 'report' | 'model' | 'alert' | 'users' | 'audit' | 'menu' | 'close' | 'refresh' | 'search' | 'filter' | 'arrow' | 'external' | 'check' | 'info' | 'clock' | 'database' | 'download' | 'chevron' | 'depth' | 'eye' | 'eyeOff' | 'mail' | 'lock' | 'logout'
 
 const paths: Record<IconName, string> = {
+  lock: 'M6 10h12v11H6z M8 10V6a4 4 0 0 1 8 0v4 M12 14v3',
+  mail: 'M3 5h18v14H3z m0 1 9 7 9-7',
+  eyeOff: 'm3 3 18 18 M10 5a12 12 0 0 1 12 7 16 16 0 0 1-3 4 M6 6a18 18 0 0 0-4 6s4 7 10 7a13 13 0 0 0 5-1 M10 10a3 3 0 0 0 4 4',
+  logout: 'M10 3H4v18h6 M9 12h13 m-5-5 5 5-5 5',
   wave: 'M2 12h4l3-8 5 16 3-8h5',
   dashboard: 'M3 3h7v7H3z M14 3h7v5h-7z M3 14h7v7H3z M14 12h7v9h-7z',
   event: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18 M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8 M12 11v2',

@@ -4,6 +4,7 @@ import { mkdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { root } from './runtime.mjs';
+import { testAuthState } from './test-auth-state.mjs';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ? pathToFileURL(process.env.PLAYWRIGHT_MODULE).href : 'playwright');
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
@@ -24,7 +25,7 @@ async function axe(page, label) {
 }
 
 async function newPage(width = 1440) {
-  const page = await browser.newPage({ viewport: { width, height: 960 } });
+  const page = await browser.newPage({ viewport: { width, height: 960 }, storageState: testAuthState() });
   page.on('pageerror', error => errors.push({ message: error.message, stack: error.stack, url: page.url() }));
   return page;
 }
