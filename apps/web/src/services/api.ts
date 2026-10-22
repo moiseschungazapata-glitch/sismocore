@@ -42,6 +42,9 @@ export interface EventosResponse {
   fuente: string
   almacenamiento: string
   periodo_dias: number
+  codigo_fuente: string
+  frecuencia_segundos: number
+  url_fuente: string
   consultado_en: string
   ultima_sincronizacion: string | null
   sincronizacion: string
@@ -49,15 +52,15 @@ export interface EventosResponse {
   mensaje: string
 }
 
-const CACHE_KEY = 'sismocore.catalogo.v1'
+const CACHE_KEY = 'sismocore.catalogo.igp.v2'
 
 export function recuperarCatalogo(): EventosResponse | null {
   try {
     const snapshot = JSON.parse(sessionStorage.getItem(CACHE_KEY) || 'null')
-    if (!snapshot || !Array.isArray(snapshot.eventos) ||
+    if (!snapshot || snapshot.codigo_fuente !== 'igp' || !Number.isInteger(snapshot.periodo_dias) || snapshot.periodo_dias < 1 || snapshot.periodo_dias > 365 || !Array.isArray(snapshot.eventos) ||
       !Number.isFinite(Date.parse(snapshot.consultado_en)) ||
       Date.now() - Date.parse(snapshot.consultado_en) > 86400000) return null
-    const limite = Date.now() - 7 * 86400000
+    const limite = Date.now() - snapshot.periodo_dias * 86400000
     const eventos = snapshot.eventos.filter((evento: EventoSismico) =>
       typeof evento.id === 'string' && typeof evento.lugar === 'string' &&
       Number.isFinite(evento.latitud) && Number.isFinite(evento.longitud) &&

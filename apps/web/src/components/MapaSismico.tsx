@@ -107,7 +107,7 @@ export default function MapaSismico({
               <br />
               Fecha UTC: {evento.ocurrido_en}
               <br />
-              <a href={evento.url_fuente} target="_blank" rel="noreferrer">Ver evento original en USGS</a>
+              <a href={evento.url_fuente} target="_blank" rel="noreferrer">Ver evento original en IGP / CENSIS</a>
             </Popup>
           </CircleMarker>
         ))}

@@ -1,7 +1,7 @@
 import type { EventoSismico } from '../services/api'
 import type { Filters } from './filters'
 
-type ReportContext = { filters: Filters; lastSync?: string | null; generatedAt?: Date }
+type ReportContext = { filters: Filters; lastSync?: string | null; generatedAt?: Date; days?: number }
 const horaPeru = (value: Date) => new Intl.DateTimeFormat('es-PE', {
   timeZone: 'America/Lima', dateStyle: 'short', timeStyle: 'medium',
 }).format(value)
@@ -32,7 +32,7 @@ export async function crearReporte(eventos: EventoSismico[], context: ReportCont
   const maximum = magnitudes.length ? Math.max(...magnitudes).toFixed(1) : 'Sin dato'
   const depth = eventos.length ? (eventos.reduce((total, e) => total + e.profundidad, 0) / eventos.length).toFixed(1) + ' km' : 'Sin dato'
   banner(1, 'SISMOCORE | Reporte de eventos sísmicos', true)
-  banner(2, 'Fuente: USGS · Cobertura: últimos 7 días, magnitud ≥ 2.5, Perú y alrededores')
+  banner(2, `Fuente: IGP / CENSIS · Cobertura: reportes del Perú en los últimos ${context.days ?? 30} días`)
   banner(3, `Generado: ${horaPeru(generatedAt)} · Hora de Perú (UTC−05:00)`)
   banner(4, `Última sincronización: ${context.lastSync ? horaPeru(new Date(context.lastSync)) : 'Sin sincronizaciones registradas'}`)
   banner(5, `Filtros · Búsqueda: ${context.filters.q || 'Sin búsqueda'} · Magnitud: ${magnitudeLabels[context.filters.magnitude] || 'Todas'} · Desde (UTC): ${context.filters.since || 'Todo el periodo disponible'}`)
@@ -42,12 +42,12 @@ export async function crearReporte(eventos: EventoSismico[], context: ReportCont
   sheet.addTable({
     name: 'EventosSismicos', ref: 'A9', headerRow: true,
     style: { theme: 'TableStyleMedium2', showRowStripes: true },
-    columns: ['Fecha y hora · Perú', 'Ubicación', 'Magnitud', 'Tipo magnitud', 'Profundidad (km)', 'Latitud', 'Longitud', 'Revisión', 'ID de origen · USGS', 'Fecha y hora · UTC', 'Enlace de origen', 'ID del registro'].map(name => ({ name, filterButton: true })),
+    columns: ['Fecha y hora · Perú', 'Ubicación', 'Magnitud', 'Tipo magnitud', 'Profundidad (km)', 'Latitud', 'Longitud', 'Revisión', 'ID de origen · IGP / CENSIS', 'Fecha y hora · UTC', 'Enlace de origen', 'ID del registro'].map(name => ({ name, filterButton: true })),
     // Strings are literal cells, including source text beginning with = or +.
     rows: eventos.map(e => [
       horaPeru(new Date(e.ocurrido_en)), e.lugar, e.magnitud, e.tipo_magnitud ?? 'Sin dato',
       e.profundidad, e.latitud, e.longitud,
-      e.estado_revision === 'reviewed' ? 'Revisado por la fuente' : e.estado_revision,
+      e.estado_revision === 'reportado_igp' ? 'Reportado por el IGP' : e.estado_revision,
       e.id_externo, new Date(e.ocurrido_en).toISOString(), e.url_fuente, e.id,
     ]),
   })

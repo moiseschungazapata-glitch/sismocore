@@ -7,10 +7,10 @@ import ExcelJS from '../apps/web/node_modules/exceljs/excel.js';
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ? pathToFileURL(process.env.PLAYWRIGHT_MODULE).href : 'playwright');
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const event = {
-  id: 'test-id', id_externo: 'us-test', magnitud: 4.2, tipo_magnitud: 'mwr',
+  id: 'test-id', id_externo: '2026-745', magnitud: 4.2, tipo_magnitud: null,
   lugar: '71 km S de Camaná, Perú', profundidad: 35, latitud: -17.2615,
-  longitud: -72.7858, ocurrido_en: new Date().toISOString(), estado_revision: 'reviewed',
-  url_fuente: 'https://earthquake.usgs.gov/earthquakes/eventpage/us-test',
+  longitud: -72.7858, ocurrido_en: new Date().toISOString(), estado_revision: 'reportado_igp',
+  url_fuente: 'https://ide.igp.gob.pe/arcgis/rest/services/monitoreocensis/SismosReportados/MapServer/0',
 };
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -18,7 +18,7 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/api/v1/auth/me', route => route.fulfill({ json: { user: { id: 'test-user', email: 'prueba@example.org', nombre_completo: 'Usuario de prueba', rol: 'lectura', estado: 'activo' } } }));
   await page.route('**/health', route => route.fulfill({ json: { estado: 'saludable', base_datos: 'conectada', configurada: true } }));
-  await page.route('**/api/v1/eventos', route => route.fulfill({ json: { total: 1, eventos: [event], consultado_en: new Date().toISOString(), ultima_sincronizacion: new Date().toISOString(), ultima_ejecucion: null } }));
+  await page.route('**/api/v1/eventos', route => route.fulfill({ json: { total: 1, eventos: [event], codigo_fuente: 'igp', fuente: 'IGP / CENSIS', periodo_dias: 30, frecuencia_segundos: 600, consultado_en: new Date().toISOString(), ultima_sincronizacion: new Date().toISOString(), ultima_ejecucion: null } }));
   await page.goto(process.env.REPORT_TEST_URL || 'http://127.0.0.1:4173/reportes');
   const button = page.getByRole('button', { name: 'Descargar reporte', exact: true });
   await button.waitFor();

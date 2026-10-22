@@ -4,10 +4,10 @@ import ExcelJS from '../../apps/web/node_modules/exceljs/excel.js';
 import { crearReporte } from '../../apps/web/src/lib/export.ts';
 
 const event = {
-  id: 'registro-prueba', id_externo: 'us-prueba', ocurrido_en: '2026-10-22T02:30:00Z',
-  magnitud: 4.2, tipo_magnitud: 'mwr', lugar: '71 km S de Camaná, Perú',
+  id: 'registro-prueba', id_externo: '2026-745', ocurrido_en: '2026-10-22T02:30:00Z',
+  magnitud: 4.2, tipo_magnitud: null, lugar: '71 km S de Camaná, Perú',
   profundidad: 35, latitud: -17.2615, longitud: -72.7858,
-  estado_revision: 'reviewed', url_fuente: 'https://earthquake.usgs.gov/earthquakes/eventpage/us-prueba',
+  estado_revision: 'reportado_igp', url_fuente: 'https://ide.igp.gob.pe/arcgis/rest/services/monitoreocensis/SismosReportados/MapServer/0',
 };
 const context = {
   filters: { q: 'Camaná', magnitude: 'medio', since: '2026-10-15' },
@@ -21,6 +21,7 @@ test('Excel report preserves separate typed columns, accents, provenance and sel
   await reopened.xlsx.load(saved);
   const sheet = reopened.getWorksheet('Eventos sísmicos');
   assert.equal(reopened.worksheets.length, 1);
+  assert.match(sheet.getCell('A2').value, /IGP.*30 días/);
   assert.equal(sheet.getCell('B10').value, event.lugar);
   assert.equal(sheet.getCell('C10').value, 4.2);
   assert.equal(sheet.getCell('F10').value, -17.2615);

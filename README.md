@@ -1,6 +1,8 @@
 # SISMOCORE
 
-Monitoreo local de eventos observados: USGS → sincronización FastAPI → Supabase → React.
+Monitoreo local de eventos observados: IGP/CENSIS → sincronización FastAPI → Supabase → React.
+
+Configuración del proveedor y despliegue: [Conectar IGP y activar la sincronización](docs/despliegue-igp.md).
 
 ## Iniciar en Windows
 
@@ -22,21 +24,21 @@ El frontend usa el proxy de Vite, por lo que no necesita una clave de Supabase p
 
 - API en http://127.0.0.1:8000 y documentación en /docs.
 - /health verifica realmente el acceso de servidor a Supabase.
-- /api/v1/eventos/ consulta eventos persistidos, no solicita USGS por cada visita.
-- El proceso interno sincroniza al arrancar y cada cinco minutos. Valida coordenadas, valores finitos, identificador, fecha y URL; registra ejecuciones/rechazos y conserva la primera recepción al actualizar un evento.
-- La clave única proveedor/ID externo evita duplicados. Los datos guardados siguen consultables si USGS falla. La pantalla muestra la última sincronización y el resultado de la ejecución.
-- Dashboard, tabla, mapa, estadísticas descriptivas y CSV comparten consulta y filtros. La interfaz vuelve a consultar cada 30 segundos.
+- /api/v1/eventos/ consulta eventos persistidos, no solicita IGP/CENSIS por cada visita.
+- El proceso interno sincroniza al arrancar y cada diez minutos. Valida coordenadas, valores finitos, identificador, fecha y URL; registra ejecuciones/rechazos y conserva la primera recepción al actualizar un evento.
+- La clave única proveedor/ID externo evita duplicados. Los datos guardados siguen consultables si IGP/CENSIS falla. La pantalla muestra la última sincronización y el resultado de la ejecución.
+- Dashboard, tabla, mapa, estadísticas descriptivas y Excel comparten consulta y filtros. La interfaz vuelve a consultar cada 30 segundos.
 - El botón Actualizar datos vuelve a consultar la base; no dispara una escritura ni una sincronización pública.
 
-Cobertura inicial: últimos siete días, magnitud mínima 2.5 y rectángulo alrededor de Perú. Puede incluir países vecinos y no equivale al catálogo completo del IGP. No se inventan eventos para llenar la pantalla. La tarea vuelve a consultar la ventana reciente para recoger revisiones del proveedor; no implementa todavía un backfill histórico completo.
+Cobertura inicial: reportes publicados por el IGP/CENSIS en los últimos 30 días. No se aplica el umbral de magnitud ni el rectángulo del antiguo conector USGS. No se inventan eventos para llenar la pantalla. La tarea vuelve a consultar la ventana reciente para recoger revisiones del proveedor; no implementa todavía un backfill histórico completo.
 
 ## Acceso y alcance
 
 Las rutas HTTP de monitoreo son de solo lectura y entregan observaciones públicas, estado general y contadores seguros. El servidor local escucha en 127.0.0.1. Las tablas conservan RLS y el navegador no recibe la clave de servidor. No se habilitan endpoints administrativos con esa clave.
 
-ML, reglas/envío de alertas, login, administración y consulta de auditoría siguen pendientes y aparecen indicados como tales. No se muestran métricas ficticias ni se presenta su estructura de tablas como funcionalidad terminada.
+ML, reglas/envío de alertas, administración y consulta de auditoría siguen pendientes y aparecen indicados como tales. No se muestran métricas ficticias ni se presenta su estructura de tablas como funcionalidad terminada.
 
-Para publicar, configurar el backend y frontend remotos, CORS, HTTPS, autenticación según el público previsto y un programador externo para la ingesta. El bucle de sincronización actual está diseñado para el proceso local persistente, no para confiar en la duración de una función serverless.
+Para publicar, configurar el backend y frontend remotos, CORS, HTTPS, autenticación según el público previsto. La ingesta remota usa GitHub Actions cada diez minutos con secretos del repositorio; en Vercel no se ejecuta el bucle local persistente. Ver docs/despliegue-igp.md.
 
 ## Comprobaciones
 
@@ -50,7 +52,7 @@ npm.cmd run test:api
 
 Las pruebas Python usan unittest/HTTPX y datos simulados; no escriben en Supabase. Cubren validación, fallos del proveedor, sincronización repetida, revisiones, preservación de ID/recepción y respuestas seguras de la API.
 
-`scripts/smoke.mjs` comprueba la aplicación real en Chrome: catálogo, filtros, mapa, análisis, estado de fuentes y CSV. Requiere Playwright disponible o PLAYWRIGHT_MODULE apuntando a su index.mjs. Sus capturas/descargas quedan en `.runtime`, excluido de Git.
+`scripts/smoke.mjs` comprueba la aplicación real en Chrome: catálogo, filtros, mapa, análisis, estado de fuentes y Excel. Requiere Playwright disponible o PLAYWRIGHT_MODULE apuntando a su index.mjs. Sus capturas/descargas quedan en `.runtime`, excluido de Git.
 
 ## Si no carga
 
@@ -58,6 +60,6 @@ Las pruebas Python usan unittest/HTTPX y datos simulados; no escriben en Supabas
 - API disponible, Supabase desconectado: verifica el archivo privado del backend y la disponibilidad del proyecto. Reinicia después de cambiar variables.
 - Catálogo vacío: espera a que termine la primera sincronización y consulta Fuentes de datos. Revisa el periodo, magnitud y filtros.
 - Puerto ocupado por otra aplicación: libera ese puerto; el iniciador no termina procesos ajenos.
-- USGS no responde: se conserva el catálogo anterior y se reintenta en la siguiente ejecución.
+- IGP/CENSIS no responde: se conserva el catálogo anterior y se reintenta en la siguiente ejecución.
 
 La cuenta y las claves usadas para operar la CLI no sustituyen las variables de conexión del servidor.

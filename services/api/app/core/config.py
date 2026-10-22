@@ -14,7 +14,9 @@ class Settings:
     DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
     SUPABASE_URL = os.getenv('SUPABASE_URL', '').rstrip('/')
     SUPABASE_SECRET_KEY = os.getenv('SUPABASE_SECRET_KEY', '')
-    SYNC_INTERVAL_SECONDS = max(60, int(os.getenv('SYNC_INTERVAL_SECONDS', '300')))
+    SYNC_INTERVAL_SECONDS = max(600, int(os.getenv('SYNC_INTERVAL_SECONDS', '600')))
+    CATALOG_DAYS = max(1, min(365, int(os.getenv('CATALOG_DAYS', '30'))))
+    RUN_BACKGROUND_SYNC = os.getenv('VERCEL') != '1'
     CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173').split(',')
     AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', 'true').lower() == 'true'
 

@@ -18,53 +18,48 @@ CLIENT = httpx.AsyncClient
 
 
 def feature(**overrides):
-    result = {
-        'id': 'us-prueba', 'geometry': {'coordinates': [-77, -12, 20]},
-        'properties': {'time': 1700000000000, 'updated': 1700000001000,
-            'mag': 4.5, 'place': 'Prueba', 'url': 'https://example.org/event',
-            'status': 'reviewed', 'magType': 'mb'},
+    attributes = {
+        'code': '2026-1', 'fechaevento': 1792552368000,
+        'lat': -12, 'lon': -77, 'prof': 20, 'magnitud': 4.5,
+        'ref': 'Prueba, Perú', 'departamento': 'Lima',
     }
-    result.update(overrides)
-    return result
+    attributes.update(overrides)
+    return {'attributes': attributes}
 
 
 class NormalizationTests(unittest.TestCase):
     def test_valid_coordinates_and_provenance(self):
         row = normalize(feature())
         self.assertEqual((row['latitud'], row['longitud'], row['profundidad']), (-12, -77, 20))
-        self.assertEqual(row['id_externo'], 'us-prueba')
-        self.assertTrue(row['ocurrido_en'].endswith('+00:00'))
+        self.assertEqual(row['id_externo'], '2026-1')
+        self.assertEqual(row['ocurrido_en'], '2026-10-21T03:12:48+00:00')
+        self.assertIn('ide.igp.gob.pe', row['url_fuente'])
+        self.assertIsNone(row['tipo_magnitud'])
+        self.assertIsNone(row['actualizado_fuente_en'])
         self.assertEqual(len(row['hash_origen']), 64)
 
     def test_invalid_coordinates_rejected(self):
-        for coordinates in [[None, -12, 20], [999, -12, 20], [-77, -99, 20], [-77, -12], [True, -12, 20]]:
-            with self.subTest(coordinates=coordinates), self.assertRaises(ValueError):
-                normalize(feature(geometry={'coordinates': coordinates}))
+        for values in [{'lat': None}, {'lon': 999}, {'lat': -99}, {'prof': None}, {'lat': True}]:
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                normalize(feature(**values))
 
     def test_missing_provenance_rejected(self):
-        row = feature()
-        del row['properties']['url']
-        with self.assertRaises(ValueError):
-            normalize(row)
+        for code in [None, '', 'invalid', "2026-1' OR 1=1"]:
+            with self.subTest(code=code), self.assertRaises(ValueError):
+                normalize(feature(code=code))
 
     def test_missing_magnitude_is_valid(self):
-        row = feature()
-        row['properties']['mag'] = None
-        self.assertIsNone(normalize(row)['magnitud'])
+        self.assertIsNone(normalize(feature(magnitud=None))['magnitud'])
 
     def test_nonfinite_magnitude_rejected(self):
-        for value in [float('nan'), float('inf'), -float('inf')]:
-            row = feature()
-            row['properties']['mag'] = value
-            with self.assertRaises(ValueError):
-                normalize(row)
+        for value in [float('nan'), float('inf'), -float('inf'), True, -1, 11]:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                normalize(feature(magnitud=value))
 
     def test_hash_changes_only_with_source_values(self):
         first = normalize(feature())
         self.assertEqual(first['hash_origen'], normalize(feature())['hash_origen'])
-        revised = feature()
-        revised['properties']['mag'] = 5
-        self.assertNotEqual(first['hash_origen'], normalize(revised)['hash_origen'])
+        self.assertNotEqual(first['hash_origen'], normalize(feature(magnitud=5))['hash_origen'])
 
 
 class MemoryDatabase:
@@ -101,18 +96,17 @@ class IngestionTests(unittest.IsolatedAsyncioTestCase):
         ):
             worker = Ingestion()
             await worker.sync()
-            original = copy.deepcopy(db.events['us-prueba'])
+            original = copy.deepcopy(db.events['2026-1'])
             await worker.sync()
             self.assertEqual(len(db.events), 1)
-            self.assertEqual(db.events['us-prueba']['id'], original['id'])
-            self.assertEqual(db.events['us-prueba']['recibido_en'], original['recibido_en'])
+            self.assertEqual(db.events['2026-1']['id'], original['id'])
+            self.assertEqual(db.events['2026-1']['recibido_en'], original['recibido_en'])
             self.assertEqual(list(db.runs.values())[-1]['registros_sin_cambios'], 1)
-            response['features'][0]['properties']['mag'] = 5
-            response['features'][0]['properties']['updated'] += 1000
+            response['features'][0]['attributes']['magnitud'] = 5
             await worker.sync()
-            self.assertEqual(db.events['us-prueba']['magnitud'], 5)
-            self.assertEqual(db.events['us-prueba']['id'], original['id'])
-            self.assertEqual(db.events['us-prueba']['recibido_en'], original['recibido_en'])
+            self.assertEqual(db.events['2026-1']['magnitud'], 5)
+            self.assertEqual(db.events['2026-1']['id'], original['id'])
+            self.assertEqual(db.events['2026-1']['recibido_en'], original['recibido_en'])
             self.assertEqual(list(db.runs.values())[-1]['registros_actualizados'], 1)
 
     async def test_upstream_failure_is_recorded(self):

@@ -21,7 +21,8 @@ async def lifespan(app):
     if settings.database_configured:
         await database.open()
         await auth.open()
-        task = asyncio.create_task(ingestion.run())
+        if settings.RUN_BACKGROUND_SYNC:
+            task = asyncio.create_task(ingestion.run())
     yield
     if task:
         task.cancel()

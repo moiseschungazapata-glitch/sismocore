@@ -1,8 +1,6 @@
 import asyncio
-import hashlib
 import json
 import logging
-import math
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -10,57 +8,13 @@ import httpx
 
 from app.core.config import settings
 from app.services.database import DatabaseError, database
+from app.services.igp import IGP_URL, SOURCE_CODE, SOURCE_NAME, normalize, query_params
 
 logger = logging.getLogger('sismocore')
-USGS_URL = 'https://earthquake.usgs.gov/fdsnws/event/1/query'
 
 
 def utcnow():
     return datetime.now(timezone.utc).isoformat()
-
-
-def timestamp(value):
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
-        raise ValueError('Fecha inválida')
-    return datetime.fromtimestamp(value / 1000, timezone.utc).isoformat()
-
-
-def number(value):
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
-        raise ValueError('Valor numérico inválido')
-    return value
-
-
-def normalize(feature):
-    """Validate before storage; incomplete observations are counted, never invented."""
-    try:
-        properties = feature['properties']
-        longitude, latitude, depth = feature['geometry']['coordinates'][:3]
-        longitude, latitude, depth = number(longitude), number(latitude), number(depth)
-        if not -180 <= longitude <= 180 or not -90 <= latitude <= 90:
-            raise ValueError('Coordenadas fuera de rango')
-        external_id = feature['id']
-        source_url = properties['url']
-        if not isinstance(external_id, str) or not external_id.strip():
-            raise ValueError('Identificador ausente')
-        if not isinstance(source_url, str) or not source_url.startswith('https://'):
-            raise ValueError('Procedencia ausente')
-        event = {
-            'id_externo': external_id, 'ocurrido_en': timestamp(properties['time']),
-            'latitud': latitude, 'longitud': longitude, 'profundidad': depth,
-            'magnitud': None if properties.get('mag') is None else number(properties['mag']),
-            'tipo_magnitud': properties.get('magType'),
-            'lugar': properties.get('place') or 'Ubicación no especificada',
-            'region': None, 'estado_revision': properties.get('status') or 'sin_especificar',
-            'url_fuente': source_url,
-            'actualizado_fuente_en': timestamp(properties.get('updated', properties['time'])),
-        }
-        event['hash_origen'] = hashlib.sha256(
-            json.dumps(event, sort_keys=True, ensure_ascii=False, separators=(',', ':')).encode()
-        ).hexdigest()
-        return event
-    except (KeyError, TypeError, ValueError, OverflowError, OSError) as exc:
-        raise ValueError('Registro sísmico incompleto o inválido') from exc
 
 
 class Ingestion:
@@ -76,10 +30,19 @@ class Ingestion:
             try:
                 self.state, self.last_error = 'sincronizando', None
                 sources = await database.request('GET', 'fuentes_datos', params={
-                    'codigo': 'eq.usgs', 'select': 'id,activa,parametros', 'limit': '1',
+                    'codigo': f'eq.{SOURCE_CODE}', 'select': 'id,activa,parametros', 'limit': '1',
                 })
                 if not sources:
-                    raise ValueError('No existe el conector USGS; aplica la migración inicial.')
+                    await database.request('POST', 'fuentes_datos', params={'on_conflict': 'codigo'}, data={
+                        'codigo': SOURCE_CODE, 'nombre': SOURCE_NAME, 'organizacion': 'Instituto Geofísico del Perú',
+                        'url_api': IGP_URL, 'tipo': 'arcgis_json', 'frecuencia_segundos': settings.SYNC_INTERVAL_SECONDS,
+                        'parametros': {'dias': settings.CATALOG_DAYS},
+                    }, prefer='resolution=ignore-duplicates,return=minimal')
+                    sources = await database.request('GET', 'fuentes_datos', params={
+                        'codigo': f'eq.{SOURCE_CODE}', 'select': 'id,activa,parametros', 'limit': '1',
+                    })
+                if not sources:
+                    raise ValueError('No se pudo registrar el conector IGP.')
                 source = sources[0]
                 if not source['activa']:
                     self.state = 'inactiva'
@@ -93,16 +56,7 @@ class Ingestion:
                 }, data={'estado': 'fallida', 'finalizado_en': utcnow(),
                          'error_resumen': 'Ejecución interrumpida antes de finalizar.'})
                 now = datetime.now(timezone.utc)
-                configured = source.get('parametros') or {}
-                params = {
-                    'format': 'geojson', 'starttime': (now - timedelta(days=7)).isoformat(),
-                    'endtime': now.isoformat(), 'minlatitude': -20, 'maxlatitude': 0,
-                    'minlongitude': -82, 'maxlongitude': -68, 'minmagnitude': 2.5,
-                    'eventtype': 'earthquake', 'orderby': 'time-asc', 'limit': 1000,
-                }
-                for key in ['minlatitude', 'maxlatitude', 'minlongitude', 'maxlongitude', 'minmagnitude']:
-                    if key in configured:
-                        params[key] = configured[key]
+                params = query_params(settings.CATALOG_DAYS, now)
                 run_id = str(uuid4())
                 try:
                     await database.request('POST', 'ejecuciones_ingesta', data={
@@ -126,7 +80,7 @@ class Ingestion:
                 await database.request('PATCH', 'fuentes_datos', params={'id': f'eq.{source_id}'},
                     data={'cursor_sincronizacion': {'ultimo_exito': finished}})
                 self.state, self.last_success = 'actualizada', finished
-                logger.info('Sincronización USGS completada: %s', counters)
+                logger.info('Sincronización IGP completada: %s', counters)
             except asyncio.CancelledError:
                 if run_id:
                     try:
@@ -141,7 +95,7 @@ class Ingestion:
             except Exception as exc:
                 self.state = 'error'
                 self.last_error = (
-                    'No se pudo sincronizar USGS. Los registros guardados siguen disponibles.'
+                    'No se pudo sincronizar IGP. Los registros guardados siguen disponibles.'
                 )
                 logger.warning('Sincronización no completada (%s).', type(exc).__name__)
                 if run_id:
@@ -159,17 +113,17 @@ class Ingestion:
             'registros_recibidos', 'registros_insertados', 'registros_actualizados',
             'registros_rechazados', 'registros_sin_cambios',
         ], 0)
-        offset = 1
+        offset = 0
         async with httpx.AsyncClient(timeout=30) as client:
             while True:
-                response = await client.get(USGS_URL, params={**params, 'offset': offset})
+                response = await client.get(IGP_URL, params={**params, 'resultOffset': offset})
                 response.raise_for_status()
                 if response.status_code == 204:
                     break
                 payload = response.json()
                 features = payload.get('features')
-                if not isinstance(features, list):
-                    raise ValueError('Respuesta USGS inválida')
+                if 'error' in payload or not isinstance(features, list):
+                    raise ValueError('Respuesta IGP inválida')
                 valid = []
                 for feature in features:
                     counters['registros_recibidos'] += 1
@@ -190,7 +144,7 @@ class Ingestion:
                     for event in batch:
                         old = known.get(event['id_externo'])
                         if old and (old['hash_origen'] == event['hash_origen'] or
-                            (old.get('actualizado_fuente_en') and
+                            (old.get('actualizado_fuente_en') and event.get('actualizado_fuente_en') and
                              datetime.fromisoformat(old['actualizado_fuente_en']) >
                              datetime.fromisoformat(event['actualizado_fuente_en']))):
                             counters['registros_sin_cambios'] += 1
@@ -203,8 +157,10 @@ class Ingestion:
                         await database.request('POST', 'eventos_sismicos',
                             params={'on_conflict': 'fuente_id,id_externo'}, data=changes,
                             prefer='resolution=merge-duplicates,return=minimal')
-                if len(features) < params['limit']:
+                if not payload.get('exceededTransferLimit', len(features) == params['resultRecordCount']):
                     break
+                if not features:
+                    raise ValueError('Paginación IGP sin progreso')
                 offset += len(features)
         return counters
 
