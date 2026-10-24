@@ -3,8 +3,8 @@
 begin;
 do $$ begin
   if (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
-      where n.nspname='public' and c.relkind='r' and c.relrowsecurity) <> 12 then
-    raise exception 'FALLO: deben existir 12 tablas protegidas con RLS'; end if;
+      where n.nspname='public' and c.relkind='r' and c.relrowsecurity) <> 13 then
+    raise exception 'FALLO: deben existir 13 tablas protegidas con RLS'; end if;
   if exists (select 1 from pg_tables where schemaname='public' and
     (has_table_privilege('authenticated', format('%I.%I',schemaname,tablename), 'INSERT') or
      has_table_privilege('authenticated', format('%I.%I',schemaname,tablename), 'UPDATE') or

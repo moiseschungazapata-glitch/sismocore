@@ -5,12 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "node ../../scripts/dev.mjs",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && vite build --config vite.push.config.ts",
     "lint": "eslint .",
     "preview": "vite preview",
     "dev:web": "vite"
   },
   "dependencies": {
+    "@firebase/app": "0.16.4",
+    "@firebase/messaging": "0.13.3",
     "exceljs": "^4.4.0",
     "leaflet": "^1.9.4",
     "react": "^19.3.1",

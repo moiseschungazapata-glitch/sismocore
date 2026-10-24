@@ -5,6 +5,7 @@ import { Link } from '../../components/Link'
 import { navigate, useLocation } from '../../lib/navigation'
 import { AuthError, authRequest, clearPrivateCache, currentUser, recoverPassword, signIn, updatePassword, type AuthUser } from '../../services/auth'
 import './index.css'
+import { currentPushDevice, forgetPushDevice } from '../../services/notifications'
 
 function destination(search: string) {
   const target = new URLSearchParams(search).get('next') || '/'
@@ -60,7 +61,8 @@ export default function AccessGate({ component: Screen }: { component: Component
   async function logout() {
     setLogoutError('')
     try {
-      await authRequest('logout', {})
+      await authRequest('logout', { dispositivo_id:user ? currentPushDevice(user.id) : null })
+      forgetPushDevice()
       ++version.current; setUser(null); clearPrivateCache(); setError('')
       channel.current?.postMessage('changed'); navigate('/index', true)
     } catch (failure) {

@@ -1,6 +1,7 @@
 import time
 from collections import defaultdict, deque
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
@@ -8,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from app.core.config import settings
 from app.services.auth import ACCESS_COOKIE, REFRESH_COOKIE, auth, require_user
 from app.services import audit
-from app.services.database import DatabaseError
+from app.services.database import database, DatabaseError
 
 router = APIRouter(prefix='/auth', tags=['Acceso'])
 
@@ -17,6 +18,11 @@ class Credentials(BaseModel):
     model_config = ConfigDict(extra='forbid')
     email: str = Field(min_length=3, max_length=254)
     password: SecretStr = Field(min_length=1, max_length=1024)
+
+
+class LogoutDevice(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    dispositivo_id: UUID | None = None
 
 
 class Recovery(BaseModel):
@@ -38,7 +44,7 @@ class RecoverySession(BaseModel):
 attempts = defaultdict(deque)
 
 
-def guard(request: Request, kind: Literal['login', 'recover', 'session', 'password', 'logout', 'admin', 'export']):
+def guard(request: Request, kind: Literal['login', 'recover', 'session', 'password', 'logout', 'admin', 'export', 'push']):
     origin = request.headers.get('origin', '')
     if origin not in settings.CORS_ORIGINS:
         raise HTTPException(403, 'La solicitud no proviene de una dirección autorizada.')
@@ -86,7 +92,7 @@ async def me(user=Depends(require_user)):
 
 
 @router.post('/logout')
-async def logout(request: Request):
+async def logout(request: Request, body: LogoutDevice | None = None):
     guard(request, 'logout')
     response = Response(status_code=204)
     token = request.cookies.get(ACCESS_COOKIE)
@@ -106,6 +112,10 @@ async def logout(request: Request):
                 token = renewed.json()['access_token']
                 identity = await auth.user(token)
                 actor = {'id':identity['id']}
+        if actor and body and body.dispositivo_id:
+            await database.request('POST','rpc/sismocore_desactivar_dispositivo',data={
+                'p_usuario_id':actor['id'],'p_dispositivo_id':str(body.dispositivo_id),
+                'p_correlacion_id':request.state.correlation_id})
         if token:
             result = await auth.request('POST', 'logout', token=token, params={'scope': 'local'})
             if result.status_code not in (200, 204, 401, 403):

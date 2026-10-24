@@ -11,3 +11,4 @@
 **/dist/
 *.log
 .runtime/
+**/*firebase-adminsdk*.json

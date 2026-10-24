@@ -19,6 +19,8 @@ class Settings:
     RUN_BACKGROUND_SYNC = os.getenv('VERCEL') != '1'
     CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173').split(',')
     AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', 'true').lower() == 'true'
+    FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID', 'sismocore-5af68')
+    FIREBASE_SERVICE_ACCOUNT_JSON = os.getenv('FIREBASE_SERVICE_ACCOUNT_JSON', '')
 
     @property
     def database_configured(self):

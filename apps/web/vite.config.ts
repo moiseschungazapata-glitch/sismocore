@@ -10,6 +10,20 @@ export default defineConfig(({ mode }) => {
   const backend = new BackendSupervisor()
   return {
     plugins: [react(), {
+      name: 'sismocore-push-worker',
+      configureServer(server) {
+        server.middlewares.use('/firebase-messaging-sw.js', async (_request,response) => {
+          try {
+            const result = await server.transformRequest('/src/firebase-messaging-sw.ts')
+            if (!result) { response.statusCode = 503; response.end(); return }
+            response.setHeader('Content-Type','text/javascript')
+            response.setHeader('Cache-Control','no-cache')
+            response.setHeader('Service-Worker-Allowed','/')
+            response.end(result.code)
+          } catch { response.statusCode = 503; response.end() }
+        })
+      },
+    }, {
       name: 'sismocore-backend',
       apply: 'serve',
       async configureServer(server) {

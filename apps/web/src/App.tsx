@@ -21,6 +21,8 @@ import { can, roleNames } from './lib/permissions'
 import Users from './pages/administration/Users'
 import Audit from './pages/administration/Audit'
 import { authorizeExport } from './services/administration'
+import Alerts from './pages/alerts/Alerts'
+import { listenForPush } from './services/notifications'
 
 function Monitoring({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<void> }) {
   const { datos, salud, error, cargando, actualizando, cargar, connection } = useCatalog()
@@ -33,6 +35,7 @@ function Monitoring({ user, onLogout }: { user: AuthUser; onLogout: () => Promis
   const [exportError, setExportError] = useState('')
   const [signingOut, setSigningOut] = useState(false)
   const [confirmLogout, setConfirmLogout] = useState(false)
+  const [pushNotice,setPushNotice] = useState<{ title:string; body:string } | null>(null)
   const drawer = useRef<HTMLDialogElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const previousPath = useRef(path)
@@ -52,11 +55,30 @@ function Monitoring({ user, onLogout }: { user: AuthUser; onLogout: () => Promis
   const averageDepth = events.length ? `${number(events.reduce((sum, event) => sum + event.profundidad, 0) / events.length)} km` : '—'
   const filterKey = JSON.stringify(filters)
   const allowed = !page || can(user, page.permission)
-  const administrative = page && ['usuarios','auditoria'].includes(page.id)
+  const administrative = page && ['usuarios','auditoria','alertas'].includes(page.id)
   const pending = page && 'pending' in page && page.pending
   const showFilters = allowed && page && ['dashboard', 'eventos', 'mapa', 'analisis', 'reportes'].includes(page.id)
   const initialLoading = cargando && !datos
   const linkAction = <Link className="button button--secondary" href={route('/eventos')}>Ver catálogo<Icon name="arrow" size={16} /></Link>
+
+  useEffect(() => {
+    let stopped = false
+    let generation = 0
+    let unsubscribe = () => {}
+    const connect = () => {
+      const ticket = ++generation
+      unsubscribe()
+      void listenForPush(user.id).then(cleanup => {
+        if (stopped || ticket !== generation) cleanup()
+        else unsubscribe = cleanup
+      }).catch(() => { /* Personal controls expose registration errors. */ })
+    }
+    const received = (event:Event) => setPushNotice((event as CustomEvent<{ title:string; body:string }>).detail)
+    connect()
+    window.addEventListener('sismocore:push-received',received)
+    window.addEventListener('sismocore:push-settings-changed',connect)
+    return () => { stopped = true; unsubscribe(); window.removeEventListener('sismocore:push-received',received); window.removeEventListener('sismocore:push-settings-changed',connect) }
+  },[user.id])
 
   useEffect(() => {
     document.title = `${page?.heading || 'Página no encontrada'} · SISMOCORE`
@@ -110,6 +132,7 @@ function Monitoring({ user, onLogout }: { user: AuthUser; onLogout: () => Promis
     <aside className="sidebar" aria-label="Menú lateral">{navigation()}<div className="sidebar-footer"><span className="source-mark"><Icon name="users" size={18} /></span><div className="session-account"><strong>{user.nombre_completo || user.email}</strong><p>{roleNames[user.rol]}</p><Button className="session-logout" variant="ghost" icon="logout" loading={signingOut} onClick={() => setConfirmLogout(true)}>Cerrar sesión</Button></div></div></aside>
     <dialog className="mobile-drawer" id="mobile-menu" ref={drawer} aria-labelledby="mobile-menu-title" onKeyDown={containDialogFocus} onClose={() => setMenuOpen(false)} onClick={event => { if (event.target === event.currentTarget) drawer.current?.close() }}><div className="drawer-shell"><div className="drawer-header"><h2 id="mobile-menu-title">Navegación</h2><Button variant="ghost" icon="close" className="icon-button" aria-label="Cerrar menú" onClick={() => drawer.current?.close()} /></div>{navigation(true)}<div className="drawer-account"><strong>{user.nombre_completo || user.email}</strong><p>{roleNames[user.rol]}</p></div><p className="drawer-note">Fuente de datos: IGP / CENSIS<br />Almacenamiento: Supabase</p></div></dialog>
     <main className="main-content" id="contenido" tabIndex={-1}>
+      {pushNotice && <div className="push-receipt" role="status"><div><strong>Notificación recibida: {pushNotice.title}</strong><p>{pushNotice.body}</p></div><Button variant="ghost" icon="close" aria-label="Cerrar notificación recibida" onClick={() => setPushNotice(null)} /></div>}
       <div className="page-heading"><div><p className="eyebrow">{page?.group || 'NAVEGACIÓN'}<span className="eyebrow-separator">/</span>SISMOCORE</p><h1 ref={heading} tabIndex={-1}>{page?.heading || 'Página no encontrada'}</h1><p className="subtitle">{page?.description || 'La dirección no corresponde a un módulo de la plataforma.'}</p></div>{page && allowed && !pending && !administrative && <Button variant="primary" icon="refresh" onClick={() => void cargar()} loading={actualizando}>{actualizando ? 'Consultando…' : 'Actualizar datos'}</Button>}</div>
       {page && allowed && !pending && !administrative && <div className="data-context"><div className="coverage"><span className="context-icon"><Icon name="map" size={19} /></span><div><strong>Cobertura del catálogo</strong><p>Últimos {datos?.periodo_dias ?? 30} días <span>·</span> Reportes del IGP <span>·</span> Perú</p></div></div><div className="sync-context"><Icon name="clock" size={16} /><span>Última sincronización<strong>{fecha(datos?.ultima_sincronizacion)} <span>· Perú</span></strong></span></div></div>}
       {error && page && allowed && !pending && !administrative && <section className={`service-message ${datos ? 'service-message--warning' : 'service-message--danger'}`} role="alert"><Icon name={datos ? 'info' : 'alert'} size={21} /><div><strong>{datos ? 'Mostrando la última consulta disponible' : 'No se pudo actualizar la información'}</strong><p>{error}</p>{datos && <p>Se conserva la última consulta disponible; sus datos pueden estar desactualizados.</p>}</div><Button variant="secondary" icon="refresh" onClick={() => void cargar()} loading={actualizando}>Reintentar conexión</Button></section>}
@@ -118,6 +141,7 @@ function Monitoring({ user, onLogout }: { user: AuthUser; onLogout: () => Promis
         : !allowed ? <Panel title="Acceso restringido"><div className="access-denied"><EmptyState icon="lock" title="Tu rol no tiene acceso a este módulo" description="Puedes consultar las áreas habilitadas desde el menú. Si necesitas otro permiso, contacta al administrador." action={<Link className="button button--primary" href="/">Volver al dashboard</Link>} /></div></Panel>
         : page.id === 'usuarios' ? <Users user={user} />
         : page.id === 'auditoria' ? <Audit />
+        : page.id === 'alertas' ? <Alerts userId={user.id} />
         : pending ? <section className="pending-panel"><div className="pending-illustration"><Icon name={page.icon} size={34} /></div><Badge tone="neutral" icon="clock">{'phase' in page ? page.phase : ''} · En preparación</Badge><h2>{page.title}</h2><p>{page.id === 'modelos' ? 'Aquí se incorporarán los experimentos, entrenamientos y métricas de evaluación. Todavía no hay modelos ni estimaciones implementados.' : page.id === 'alertas' ? 'Este módulo incorporará reglas, aprobaciones y seguimiento de entregas. Actualmente no se están emitiendo alertas.' : 'El acceso ya se valida con Supabase Auth. La administración de usuarios y el historial de auditoría se incorporarán en la siguiente fase.'}</p><div className="pending-actions"><Link className="button button--primary" href={route('/')}>Volver al monitoreo<Icon name="arrow" size={16} /></Link></div><span className="pending-footnote">El catálogo, el mapa y las exportaciones ya están disponibles.</span></section>
           : initialLoading ? <LoadingState />
             : !datos ? <Panel title="Catálogo no disponible"><EmptyState icon="database" title="Estamos intentando recuperar la conexión" description="Todavía no hay una consulta disponible en este navegador. La pantalla volverá a intentarlo automáticamente." action={<Button icon="refresh" onClick={() => void cargar()} loading={actualizando}>Volver a intentar</Button>} /></Panel>
