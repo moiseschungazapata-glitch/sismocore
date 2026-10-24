@@ -78,6 +78,8 @@ async def start_verification(body:PhoneVerification,request:Request,user=Depends
     except DatabaseError as failure:
         raise HTTPException(503,'Twilio procesó la solicitud, pero no se pudo guardar el resultado. Puede haber una llamada en curso. Revisa su consola antes de repetirla.') from failure
     if error:
+        if error.code=='10002':
+            raise HTTPException(503,'Tu cuenta Trial de Twilio no permite verificar números por API (10002). Agrega y verifica el número en Twilio → Try out Voice. Después pulsa Actualizar llamadas en SISMOCORE. Repetir esta solicitud no elimina la restricción.')
         if error.code in ('CONEXION','RESPUESTA_INVALIDA'):
             raise HTTPException(503,'No se pudo confirmar la solicitud. Puede que Twilio haya iniciado la llamada; no la repitas de inmediato. Comprueba el número en su consola.')
         raise HTTPException(503,'Twilio rechazó la verificación por API. Puede deberse a restricciones Trial o del destino. Verifica el número en Try out Voice de Twilio; SISMOCORE podrá utilizarlo después.')

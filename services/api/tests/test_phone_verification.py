@@ -67,6 +67,14 @@ class VerificationApiTests(unittest.IsolatedAsyncioTestCase):
         response=await self.client.post('/api/v1/voz/verificaciones',json=BODY,headers=HEADERS)
         self.assertEqual(response.status_code,503);self.assertIn('Try out Voice',response.json()['detail'])
         self.mocks[2].assert_awaited_once()
+
+    async def test_10002_reports_confirmed_trial_restriction(self):
+        self.mocks[2].side_effect=VoiceError('10002')
+        response=await self.client.post('/api/v1/voz/verificaciones',json=BODY,headers=HEADERS)
+        self.assertEqual(response.status_code,503)
+        self.assertIn('no permite verificar números por API (10002)',response.json()['detail'])
+        self.assertIn('Actualizar llamadas',response.json()['detail'])
+        self.mocks[2].assert_awaited_once()
     async def test_unknown_result_does_not_retry(self):
         self.mocks[2].side_effect=VoiceError('CONEXION')
         response=await self.client.post('/api/v1/voz/verificaciones',json=BODY,headers=HEADERS)
