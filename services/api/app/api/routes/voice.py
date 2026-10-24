@@ -41,6 +41,7 @@ def provider_error(failure):
         '21219':'Twilio requiere verificar el teléfono de destino.',
         '21215':'Twilio no permite llamar a este destino con la configuración actual.',
         '21408':'Twilio no permite llamadas al país de destino con la configuración actual.',
+        '0':'Twilio rechazó la solicitud sin un código detallado (0). Consulta el registro de Twilio antes de repetir la prueba.',
         'URL_INVALIDA':'Revisa la dirección pública HTTPS de SISMOCORE en el servidor.',
     }
     return HTTPException(503,messages.get(failure.code,'Twilio no confirmó la operación. Revisa su consola antes de repetir la prueba.'))

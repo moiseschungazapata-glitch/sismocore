@@ -74,7 +74,6 @@ class VoiceProvider:
             raise VoiceError('URL_INVALIDA')
         payload=await self.request('POST','/Calls.json',data={
             'To':phone,'From':settings.TWILIO_FROM_NUMBER,'Url':settings.PUBLIC_APP_URL+'/api/v1/voz/prueba.xml',
-            'Method':'POST','Timeout':'20','TimeLimit':'30',
         })
         if not re.fullmatch(r'CA[0-9a-fA-F]{32}',str(payload.get('sid',''))) or payload.get('status') not in STATES:
             raise VoiceError('RESPUESTA_INVALIDA')

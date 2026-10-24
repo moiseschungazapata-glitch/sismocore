@@ -140,14 +140,22 @@ class VoiceProviderTests(unittest.IsolatedAsyncioTestCase):
             result=await voice_provider.recipients()
         self.assertEqual(list(result.values()),[PHONE])
 
-    async def test_fixed_url_and_duration_no_free_text(self):
+    async def test_trial_uses_only_console_fields_and_fixed_url(self):
         with patch.object(voice_provider,'check_trial',new=AsyncMock()),patch.object(voice_provider,'request',new=AsyncMock(return_value={'sid':SID,'status':'queued'})) as request:
             await voice_provider.call(PHONE)
         sent=request.await_args.kwargs['data']
-        self.assertEqual(sent['TimeLimit'],'30')
+        self.assertEqual(set(sent),{'To','From','Url'})
         self.assertEqual(sent['To'],PHONE)
         self.assertEqual(sent['Url'],settings.PUBLIC_APP_URL+'/api/v1/voz/prueba.xml')
         self.assertNotIn('Twiml',sent)
+
+    async def test_zero_provider_code_is_preserved_without_echoing_message(self):
+        def response(request):return httpx.Response(403,json={'code':0,'message':'SECRET_'+PHONE})
+        client=httpx.AsyncClient(transport=httpx.MockTransport(response))
+        with patch.object(VoiceProvider,'configured',new_callable=PropertyMock,return_value=True),patch('app.services.voice.httpx.AsyncClient',return_value=client):
+            with self.assertRaises(VoiceError) as failure:await voice_provider.request('POST','/Calls.json',data={'To':PHONE})
+        self.assertEqual(failure.exception.code,'0')
+        self.assertNotIn(PHONE,str(failure.exception))
 
     async def test_provider_error_never_exposes_raw_response(self):
         def response(request):return httpx.Response(403,json={'code':21219,'message':'SECRET_'+PHONE})
