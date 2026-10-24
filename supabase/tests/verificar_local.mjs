@@ -33,6 +33,7 @@ try {
   await db.exec(await readFile(new URL('../migrations/20261024000500_interruptor_notificaciones.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../migrations/20261024000600_verificar_telefono_voz.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../migrations/20261024000700_pruebas_sms.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../migrations/20261024000800_sms_automaticos.sql',import.meta.url),'utf8'));
   console.log('Migracion ejecutada en PostgreSQL embebido con Auth/Storage simulados.');
   const results = await db.exec(await readFile(new URL('./esquema_sismocore.sql',import.meta.url),'utf8'));
   for (const result of results) for (const row of result.rows ?? []) if (row.resultado) console.log(row.resultado);
@@ -44,6 +45,8 @@ try {
   await db.exec(await readFile(new URL('./pruebas_sms.sql',import.meta.url),'utf8'));
   console.log('SMS: limites, aislamiento por cuenta y privacidad comprobados.');
   await db.exec(await readFile(new URL('./llamadas_automaticas.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('./sms_automaticos.sql',import.meta.url),'utf8'));
+  console.log('SMS automaticos: consentimiento, pausa, antiguedad, cuota compartida y deduplicacion comprobados.');
   await db.exec(await readFile(new URL('./interruptor_push.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('./verificacion_voz.sql',import.meta.url),'utf8'));
   console.log('Verificacion telefonica: cuota compartida, privacidad y consentimiento independiente comprobados.');

@@ -58,7 +58,7 @@ class RuleApiTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_ranges_and_empty_recipients_rejected(self):
         for change in [{'magnitud_minima':-1},{'destinatarios':[]},{'destinatarios':[USER,USER]},
-            {'nombre':'   '},{'canales':['sms']},{'canales':['voz','voz']},{'canales':[]},{'zona':{'latitud':91,'longitud':0,'radio_km':100}},
+            {'nombre':'   '},{'canales':['invalido']},{'canales':['voz','voz']},{'canales':[]},{'zona':{'latitud':91,'longitud':0,'radio_km':100}},
             {'zona':{'latitud':0,'longitud':0,'radio_km':0}}]:
             response=await self.client.post('/api/v1/alertas/reglas',headers=ORIGIN,json={**BODY,**change})
             self.assertEqual(response.status_code,422)
@@ -103,6 +103,7 @@ class RuleApiTests(unittest.IsolatedAsyncioTestCase):
 
 class ProcessorTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        sms=patch('app.services.alerts.process_automatic_sms',new=AsyncMock(return_value={'estado':'apagadas','aceptadas':0}));sms.start();self.addCleanup(sms.stop)
         p=patch('app.services.alerts.process_automatic_calls',new=AsyncMock(return_value={'estado':'apagadas','aceptadas':0}))
         p.start();self.addCleanup(p.stop)
 

@@ -28,7 +28,7 @@ class Rule(BaseModel):
     destinatarios:Annotated[list[UUID],Field(min_length=1,max_length=50)]
     activa:bool=False
     version:int | None=Field(default=None,ge=1)
-    canales:list[Literal['push','voz']]=Field(default_factory=lambda:['push'],min_length=1,max_length=2)
+    canales:list[Literal['push','voz','sms']]=Field(default_factory=lambda:['push'],min_length=1,max_length=3)
 
     @model_validator(mode='after')
     def clean(self):
@@ -39,15 +39,15 @@ class Rule(BaseModel):
 
 @router.get('/reglas')
 async def rules(user=Depends(manage)):
-    rows=await database.request('GET','reglas_alerta',params={'select':RULE_FIELDS,'canales':'cd.{push,voz}','order':'creado_en.desc','limit':'20'})
-    recipients=await database.request('GET','perfiles',params={'select':'id,nombre_completo,rol,voz_activa,voz_ultimos','estado':'eq.activo','order':'nombre_completo,id','limit':'200'})
+    rows=await database.request('GET','reglas_alerta',params={'select':RULE_FIELDS,'canales':'cd.{push,voz,sms}','order':'creado_en.desc','limit':'20'})
+    recipients=await database.request('GET','perfiles',params={'select':'id,nombre_completo,rol,voz_activa,voz_ultimos,sms_activa,sms_ultimos','estado':'eq.activo','order':'nombre_completo,id','limit':'200'})
     return {'reglas':rows,'destinatarios':recipients,'permite_voz':'voz.probar' in permissions_for(user['rol'])}
 
 
 async def save(body,request,user,rule_id=None):
     guard(request,'push')
-    if 'voz' in body.canales and 'voz.probar' not in permissions_for(user['rol']):
-        raise HTTPException(403,'Solo administración puede configurar llamadas.',headers={'X-Permission-Denied':'true'})
+    if any(channel in body.canales for channel in ('voz','sms')) and 'voz.probar' not in permissions_for(user['rol']):
+        raise HTTPException(403,'Solo administración puede configurar llamadas o SMS.',headers={'X-Permission-Denied':'true'})
     data=await rpc('sismocore_guardar_regla_alerta',{'p_actor':user['id'],'p_id':str(rule_id) if rule_id else None,
         'p_nombre':body.nombre,'p_magnitud':body.magnitud_minima,'p_zona':body.zona.model_dump() if body.zona else {},
         'p_destinatarios':[str(value) for value in body.destinatarios],'p_activa':body.activa,'p_version':body.version,
@@ -69,8 +69,8 @@ async def update(rule_id:UUID,body:Rule,request:Request,user=Depends(manage)):
 async def history(alcance:str=Query('propias',pattern='^(propias|todas)$'),user=Depends(own)):
     if alcance=='todas' and 'alertas.administrar' not in permissions_for(user['rol']):
         raise HTTPException(403,'Tu rol solo puede consultar sus propios avisos.',headers={'X-Permission-Denied':'true'})
-    params={'select':'id,canal,voz_ultimos,estado_proveedor,estado,creado_en,ultimo_intento_en,error_codigo,intentos,usuario:perfiles!entregas_alerta_usuario_id_fkey(nombre_completo),dispositivo:dispositivos_notificacion(etiqueta),alerta:alertas(titulo,mensaje,url_fuente,contexto)',
-        'canal':'in.(push,voz)','order':'creado_en.desc,id','limit':'50'}
+    params={'select':'id,canal,voz_ultimos,sms_ultimos,estado_proveedor,estado,creado_en,ultimo_intento_en,error_codigo,intentos,usuario:perfiles!entregas_alerta_usuario_id_fkey(nombre_completo),dispositivo:dispositivos_notificacion(etiqueta),alerta:alertas(titulo,mensaje,url_fuente,contexto)',
+        'canal':'in.(push,voz,sms)','order':'creado_en.desc,id','limit':'50'}
     if alcance=='propias': params['usuario_id']=f'eq.{user["id"]}'
     rows=await database.request('GET','entregas_alerta',params=params)
     return {'entregas':rows}

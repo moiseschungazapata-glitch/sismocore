@@ -70,7 +70,7 @@ export default function Alerts({ userId,manageRules=false,manageCalls=false }: {
       {manageCalls&&<nav className="alerts-channel-nav" aria-label="Canal de entrega">
         <button type="button" aria-label="Notificaciones Navegadores y dispositivos" aria-pressed={channel==='push'} onClick={()=>setChannel('push')}><Icon name="alert" size={18}/><span>Notificaciones<small>Navegadores y dispositivos</small></span></button>
         <button type="button" aria-label="Llamadas Teléfono autorizado" aria-pressed={channel==='voz'} onClick={()=>setChannel('voz')}><Icon name="wave" size={18}/><span>Llamadas<small>Teléfono autorizado</small></span></button>
-        <button type="button" aria-label="SMS Mensajes de prueba" aria-pressed={channel==='sms'} onClick={()=>setChannel('sms')}><Icon name="mail" size={18}/><span>SMS<small>Mensajes de prueba</small></span></button>
+        <button type="button" aria-label="SMS Pruebas y automatización" aria-pressed={channel==='sms'} onClick={()=>setChannel('sms')}><Icon name="mail" size={18}/><span>SMS<small>Pruebas y automatización</small></span></button>
       </nav>}
       {channel==='voz'&&manageCalls?<VoiceTrial/>:channel==='sms'&&manageCalls?<SmsTrial/>:<>
         <AutomaticPush status={status} onChanged={()=>setRevision(value=>value+1)}/>

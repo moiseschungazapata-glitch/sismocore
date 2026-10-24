@@ -5,6 +5,7 @@ from app.core.config import settings
 from app.services.database import database
 from app.services.push import push_sender, PushError
 from app.services.automatic_voice import process_automatic_calls
+from app.services.automatic_sms import process_automatic_sms
 
 
 async def process_push_alerts():
@@ -40,10 +41,12 @@ async def process_push_alerts():
 
 async def process_alerts():
     # A configuration failure in one channel must not disable the other channel.
-    failures=[];push=None;voice=None
+    failures=[];push=None;voice=None;sms=None
     try: push=await process_push_alerts()
     except Exception: failures.append('notificaciones')
     try: voice=await process_automatic_calls()
     except Exception: failures.append('llamadas')
+    try: sms=await process_automatic_sms()
+    except Exception: failures.append('SMS')
     if failures: raise RuntimeError('No se completó el procesamiento de '+', '.join(failures)+'. Revisa las credenciales y la sincronización.')
-    return {**push,'voz':voice}
+    return {**push,'voz':voice,'sms':sms}

@@ -86,6 +86,8 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ChannelIndependenceTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        sms=patch('app.services.alerts.process_automatic_sms',new=AsyncMock(return_value={'estado':'apagadas','aceptadas':0}));sms.start();self.addCleanup(sms.stop)
     async def test_push_failure_still_processes_voice(self):
         with patch('app.services.alerts.process_push_alerts',new=AsyncMock(side_effect=RuntimeError())),patch('app.services.alerts.process_automatic_calls',new=AsyncMock(return_value={})) as voice:
             with self.assertRaisesRegex(RuntimeError,'notificaciones'):await process_alerts()
