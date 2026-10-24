@@ -7,6 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from app.core.config import settings
 from app.services.auth import ACCESS_COOKIE, REFRESH_COOKIE, auth, require_user
+from app.services import audit
+from app.services.database import DatabaseError
 
 router = APIRouter(prefix='/auth', tags=['Acceso'])
 
@@ -36,7 +38,7 @@ class RecoverySession(BaseModel):
 attempts = defaultdict(deque)
 
 
-def guard(request: Request, kind: Literal['login', 'recover', 'session', 'password', 'logout']):
+def guard(request: Request, kind: Literal['login', 'recover', 'session', 'password', 'logout', 'admin', 'export']):
     origin = request.headers.get('origin', '')
     if origin not in settings.CORS_ORIGINS:
         raise HTTPException(403, 'La solicitud no proviene de una dirección autorizada.')
@@ -62,9 +64,18 @@ async def login(body: Credentials, request: Request, response: Response):
     result = await auth.request('POST', 'token', params={'grant_type': 'password'},
         data={'email': body.email.strip(), 'password': body.password.get_secret_value()})
     if result.is_error:
+        await audit.record(request, 'sesion.rechazada', 'sesiones', result='denegado',
+                           details={'motivo':'credenciales_invalidas'})
         raise HTTPException(401, 'Correo o contraseña incorrectos. Verifica tus datos.')
     session = result.json()
-    profile = await auth.profile(await auth.user(session['access_token']))
+    identity = await auth.user(session['access_token'])
+    try:
+        profile = await auth.profile(identity)
+    except HTTPException:
+        await audit.record(request, 'sesion.rechazada', 'sesiones', actor={'id':identity['id']},
+                           result='denegado', details={'motivo':'perfil_no_activo'})
+        raise
+    await audit.record(request, 'sesion.iniciar', 'sesiones', actor=profile)
     auth.set_session(response, session)
     return {'user': profile}
 
@@ -79,22 +90,29 @@ async def logout(request: Request):
     guard(request, 'logout')
     response = Response(status_code=204)
     token = request.cookies.get(ACCESS_COOKIE)
+    actor = None
     try:
         if token:
             valid = await auth.request('GET', 'user', token=token)
         else:
             valid = None
+        if valid is not None and valid.is_success:
+            actor = {'id':valid.json()['id']}
         refresh = request.cookies.get(REFRESH_COOKIE)
         if refresh and (valid is None or valid.status_code == 401):
             renewed = await auth.request('POST', 'token', params={'grant_type': 'refresh_token'},
                 data={'refresh_token': refresh})
             if renewed.is_success:
                 token = renewed.json()['access_token']
+                identity = await auth.user(token)
+                actor = {'id':identity['id']}
         if token:
             result = await auth.request('POST', 'logout', token=token, params={'scope': 'local'})
             if result.status_code not in (200, 204, 401, 403):
                 response.status_code = 503
-    except HTTPException:
+        if actor:
+            await audit.record(request, 'sesion.cerrar', 'sesiones', actor=actor)
+    except (HTTPException, DatabaseError):
         response.status_code = 503
     # Local logout always removes both cookies, including while Supabase is offline.
     auth.clear_session(response)
@@ -125,6 +143,7 @@ async def recovery_session(body: RecoverySession, request: Request, response: Re
     session = renewed.json()
     if (await auth.user(session['access_token']))['id'] != user['id']:
         raise HTTPException(401, 'El enlace de recuperación no es válido.')
+    await audit.record(request, 'sesion.iniciar', 'sesiones', actor=profile, details={'motivo':'recuperacion'})
     auth.set_session(response, session)
     return {'user': profile}
 
@@ -137,4 +156,8 @@ async def change_password(body: Password, request: Request, user=Depends(require
         data={'password': body.password.get_secret_value()})
     if result.is_error:
         raise HTTPException(400, 'No se pudo cambiar la contraseña. Usa una nueva de al menos 12 caracteres o solicita otro enlace.')
+    try:
+        await audit.record(request, 'contrasena.actualizar', 'sesiones', actor=user)
+    except DatabaseError as exc:
+        raise HTTPException(503, 'La contraseña se actualizó, pero no se pudo confirmar la bitácora. Utiliza la nueva contraseña para acceder.') from exc
     return {'message': 'Contraseña actualizada. Ya puedes continuar al sistema.'}

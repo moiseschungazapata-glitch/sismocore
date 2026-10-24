@@ -22,13 +22,13 @@ try {
   // Simulate unavailable responses, then reload: state must survive a full page load.
   const outage = async route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'Interrupción simulada para comprobar la recuperación.' }) });
   await page.route('**/health', outage);
-  await page.route('**/api/v1/eventos/', outage);
+  await page.route('**/api/v1/eventos', outage);
   await page.reload({ waitUntil: 'networkidle' });
   await page.getByText('Se conserva la última consulta disponible; sus datos pueden estar desactualizados.', { exact: true }).waitFor();
   if (await page.locator('tbody tr').count() !== initialRows) throw new Error('Se perdió la última consulta al recargar sin API.');
   await page.getByText('Reconectando con la API…', { exact: true }).waitFor();
   await page.unroute('**/health', outage);
-  await page.unroute('**/api/v1/eventos/', outage);
+  await page.unroute('**/api/v1/eventos', outage);
   // The 5-second retry must recover without clicking a button.
   await page.getByText('API y Supabase conectados', { exact: true }).waitFor({ timeout: 15000 });
 

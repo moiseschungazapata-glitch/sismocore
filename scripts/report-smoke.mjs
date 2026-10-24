@@ -16,7 +16,8 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.route('**/api/v1/auth/me', route => route.fulfill({ json: { user: { id: 'test-user', email: 'prueba@example.org', nombre_completo: 'Usuario de prueba', rol: 'lectura', estado: 'activo' } } }));
+  await page.route('**/api/v1/auth/me', route => route.fulfill({ json: { user: { id: 'test-user', email: 'prueba@example.org', nombre_completo: 'Usuario de prueba', rol: 'analista', estado: 'activo', permisos: ['catalogo.leer', 'reportes.exportar', 'fuentes.leer', 'modelos.leer'] } } }));
+  await page.route('**/api/v1/reportes/exportar', route => route.fulfill({ json: { eventos:[event], total:1, consultado_en:new Date().toISOString(), ultima_sincronizacion:new Date().toISOString(), periodo_dias:30, solicitante:{ id:'test-user', nombre:'Usuario de prueba' }, exportacion_id:'test-export-id', correlacion_id:'test-correlation-id' } }));
   await page.route('**/health', route => route.fulfill({ json: { estado: 'saludable', base_datos: 'conectada', configurada: true } }));
   await page.route('**/api/v1/eventos', route => route.fulfill({ json: { total: 1, eventos: [event], codigo_fuente: 'igp', fuente: 'IGP / CENSIS', periodo_dias: 30, frecuencia_segundos: 600, consultado_en: new Date().toISOString(), ultima_sincronizacion: new Date().toISOString(), ultima_ejecucion: null } }));
   await page.goto(process.env.REPORT_TEST_URL || 'http://127.0.0.1:4173/reportes');

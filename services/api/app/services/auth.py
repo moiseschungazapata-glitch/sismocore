@@ -43,7 +43,13 @@ class Auth:
             'select': 'id,nombre_completo,rol,estado', 'id': f'eq.{user["id"]}', 'limit': '1'})
         if not rows or rows[0]['estado'] != 'activo':
             raise HTTPException(403, 'Tu cuenta está pendiente de activación o suspendida. Contacta al administrador.')
-        return {'id': user['id'], 'email': user.get('email', ''), **rows[0]}
+        from app.services.permissions import permissions_for
+        return {'id': user['id'], 'email': user.get('email', ''), **rows[0],
+                'permisos': permissions_for(rows[0]['rol'])}
+
+    async def admin_request(self, method, path, *, data=None, params=None):
+        token = settings.SUPABASE_SECRET_KEY if settings.SUPABASE_SECRET_KEY.startswith('eyJ') else None
+        return await self.request(method, path, data=data, params=params, token=token)
 
     async def user(self, token):
         result = await self.request('GET', 'user', token=token)

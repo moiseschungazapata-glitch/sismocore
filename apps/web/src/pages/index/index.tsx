@@ -40,6 +40,7 @@ export default function AccessGate({ component: Screen }: { component: Component
     const expired = () => { ++version.current; setUser(null); clearPrivateCache(); setError('Tu sesión ha terminado. Vuelve a iniciar sesión.') }
     const timer = window.setInterval(() => void check(), 240000)
     window.addEventListener('sismocore:session-ended', expired)
+    window.addEventListener('sismocore:permissions-changed', onFocus)
     document.addEventListener('visibilitychange', onFocus)
     if ('BroadcastChannel' in window) {
       channel.current = new BroadcastChannel('sismocore.auth')
@@ -47,7 +48,7 @@ export default function AccessGate({ component: Screen }: { component: Component
     }
     const invalidate = () => { ++version.current }
     const authChannel = channel.current
-    return () => { invalidate(); window.clearInterval(timer); authChannel?.close(); window.removeEventListener('sismocore:session-ended', expired); document.removeEventListener('visibilitychange', onFocus) }
+    return () => { invalidate(); window.clearInterval(timer); authChannel?.close(); window.removeEventListener('sismocore:session-ended', expired); window.removeEventListener('sismocore:permissions-changed', onFocus); document.removeEventListener('visibilitychange', onFocus) }
   }, [check])
 
   useEffect(() => {

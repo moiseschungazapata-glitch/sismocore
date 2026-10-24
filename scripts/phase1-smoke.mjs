@@ -132,7 +132,7 @@ try {
   checked.push('sin desbordamiento horizontal en cinco tamaños');
 
   const loading = await newPage();
-  await loading.route('**/api/v1/eventos/', async route => { await delay(1700); await route.fulfill({ json: data }); });
+  await loading.route('**/api/v1/eventos', async route => { await delay(1700); await route.fulfill({ json: data }); });
   await loading.goto(origin, { waitUntil: 'domcontentloaded' });
   await loading.getByRole('status', { name: 'Consultando el catálogo', exact: true }).waitFor();
   await loading.getByRole('heading', { name: 'Eventos más recientes', exact: true }).waitFor();
@@ -141,7 +141,7 @@ try {
   const failed = await newPage();
   const unavailable = route => route.fulfill({ status: 503, json: { detail: 'Servicio no disponible para prueba.' } });
   await failed.route('**/health', unavailable);
-  await failed.route('**/api/v1/eventos/', unavailable);
+  await failed.route('**/api/v1/eventos', unavailable);
   await failed.goto(origin, { waitUntil: 'networkidle' });
   await failed.getByRole('heading', { name: 'Catálogo no disponible', exact: true }).waitFor();
   assert.equal(await failed.locator('.metric-card').count(), 0);
@@ -150,7 +150,7 @@ try {
   checked.push('error inicial sin métricas ficticias');
 
   const empty = await newPage();
-  await empty.route('**/api/v1/eventos/', route => route.fulfill({ json: { ...data, total: 0, eventos: [] } }));
+  await empty.route('**/api/v1/eventos', route => route.fulfill({ json: { ...data, total: 0, eventos: [] } }));
   await empty.goto(`${origin}/mapa`, { waitUntil: 'networkidle' });
   await empty.getByRole('heading', { name: 'Sin eventos para este filtro', exact: true }).waitFor();
   assert.equal(await empty.locator('.leaflet-container').count(), 0);

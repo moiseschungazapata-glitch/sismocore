@@ -1,5 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager, suppress
+from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -13,6 +14,9 @@ from app.services.auth import auth, require_user
 from app.core.config import settings
 from app.services.database import database, DatabaseError
 from app.services.ingestion import ingestion
+from app.api.routes.admin import router as admin_router
+from app.api.routes.reports import router as reports_router
+from app.api.routes.sources import router as sources_router
 
 
 @asynccontextmanager
@@ -35,12 +39,15 @@ async def lifespan(app):
 app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION,
               debug=settings.DEBUG, lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=settings.CORS_ORIGINS,
-                   allow_methods=['GET', 'POST'], allow_headers=['Content-Type'], allow_credentials=True)
+                   allow_methods=['GET', 'POST', 'PATCH'], allow_headers=['Content-Type'],
+                   expose_headers=['X-Correlation-ID','X-Permission-Denied'], allow_credentials=True)
 
 
 @app.middleware('http')
 async def private_responses(request, call_next):
+    request.state.correlation_id = str(uuid4())
     response = await call_next(request)
+    response.headers['X-Correlation-ID'] = request.state.correlation_id
     if request.url.path.startswith('/api/') or request.url.path == '/health':
         response.headers['Cache-Control'] = 'no-store'
         response.headers['X-Content-Type-Options'] = 'nosniff'
@@ -61,7 +68,10 @@ async def database_unavailable(request, exc):
 
 app.include_router(auth_router, prefix=settings.API_PREFIX)
 app.include_router(health_router, dependencies=[Depends(require_user)])
-app.include_router(eventos_router, prefix=settings.API_PREFIX, dependencies=[Depends(require_user)])
+app.include_router(eventos_router, prefix=settings.API_PREFIX)
+app.include_router(admin_router, prefix=settings.API_PREFIX)
+app.include_router(reports_router, prefix=settings.API_PREFIX)
+app.include_router(sources_router, prefix=settings.API_PREFIX)
 
 
 @app.get('/')

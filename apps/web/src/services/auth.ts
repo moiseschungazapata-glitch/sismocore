@@ -6,6 +6,7 @@ export interface AuthUser {
   nombre_completo: string
   rol: 'administrador' | 'analista' | 'operador' | 'auditor' | 'lectura'
   estado: 'activo'
+  permisos: string[]
 }
 
 export class AuthError extends Error {
@@ -26,6 +27,29 @@ export async function authRequest<T>(path: string, body?: object): Promise<T> {
   }
   const data = response.status === 204 ? null : await response.json().catch(() => null)
   if (!response.ok) throw new AuthError(typeof data?.detail === 'string' ? data.detail : 'El servicio de acceso no está disponible. Inténtalo de nuevo.', response.status)
+  return data as T
+}
+
+export async function protectedRequest<T>(path: string, body?: object, method?: 'POST' | 'PATCH', signal?: AbortSignal): Promise<T> {
+  let response: Response
+  try {
+    response = await fetch(`${base}/api/v1/${path}`, {
+      method: method || (body === undefined ? 'GET' : 'POST'), credentials: 'include',
+      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(25000)]) : AbortSignal.timeout(25000),
+    })
+  } catch (error) {
+    if (signal?.aborted) throw error
+    throw new AuthError('No se pudo contactar con el servicio. Comprueba tu conexión y vuelve a intentarlo.', 0)
+  }
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403 && !response.headers.has('X-Permission-Denied')) {
+      clearPrivateCache(); window.dispatchEvent(new Event('sismocore:session-ended'))
+    } else if (response.status === 403) window.dispatchEvent(new Event('sismocore:permissions-changed'))
+    throw new AuthError(typeof data?.detail === 'string' ? data.detail : 'No se pudo completar la operación.', response.status)
+  }
   return data as T
 }
 

@@ -29,7 +29,7 @@ export function LoadingState() {
   return <div className="loading-state" role="status" aria-label="Consultando el catálogo" aria-busy="true"><span className="sr-only">Consultando el catálogo y comprobando la conexión.</span><div className="metrics-grid">{[1, 2, 3, 4].map(i => <div className="metric-card skeleton-card" key={i}><div className="skeleton skeleton-label" /><div className="skeleton skeleton-value" /><div className="skeleton skeleton-note" /></div>)}</div><div className="panel skeleton-table">{[1, 2, 3, 4].map(i => <div className="skeleton skeleton-row" key={i} />)}</div></div>
 }
 
-export function Dialog({ open, title, description, onClose, children }: { open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode }) {
+export function Dialog({ open, title, description, onClose, children, eyebrow = 'EVENTO OBSERVADO', busy = false }: { open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; eyebrow?: string; busy?: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const titleId = useId()
   const descriptionId = useId()
@@ -37,5 +37,5 @@ export function Dialog({ open, title, description, onClose, children }: { open: 
     if (open && !dialog.current?.open) dialog.current?.showModal()
     else if (!open && dialog.current?.open) dialog.current.close()
   }, [open])
-  return <dialog className="detail-dialog" ref={dialog} aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} onClose={onClose} onKeyDown={containDialogFocus} onClick={e => { if (e.target === e.currentTarget) dialog.current?.close() }}><div className="dialog-shell"><div className="dialog-header"><div><p className="eyebrow">EVENTO OBSERVADO</p><h2 id={titleId}>{title}</h2>{description && <p id={descriptionId}>{description}</p>}</div><Button variant="ghost" icon="close" aria-label="Cerrar detalle" onClick={() => dialog.current?.close()} /></div>{children}</div></dialog>
+  return <dialog className="detail-dialog" ref={dialog} aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} onClose={onClose} onCancel={event => { if (busy) event.preventDefault() }} onKeyDown={containDialogFocus} onClick={e => { if (!busy && e.target === e.currentTarget) dialog.current?.close() }}><div className="dialog-shell"><div className="dialog-header"><div><p className="eyebrow">{eyebrow}</p><h2 id={titleId}>{title}</h2>{description && <p id={descriptionId}>{description}</p>}</div><Button variant="ghost" icon="close" aria-label="Cerrar detalle" disabled={busy} onClick={() => dialog.current?.close()} /></div>{children}</div></dialog>
 }

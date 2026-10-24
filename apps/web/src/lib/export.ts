@@ -1,7 +1,7 @@
 import type { EventoSismico } from '../services/api'
 import type { Filters } from './filters'
 
-type ReportContext = { filters: Filters; lastSync?: string | null; generatedAt?: Date; days?: number }
+type ReportContext = { filters: Filters; lastSync?: string | null; generatedAt?: Date; days?: number; requestedBy?: string; cutoff?: string; exportId?: string }
 const horaPeru = (value: Date) => new Intl.DateTimeFormat('es-PE', {
   timeZone: 'America/Lima', dateStyle: 'short', timeStyle: 'medium',
 }).format(value)
@@ -34,10 +34,12 @@ export async function crearReporte(eventos: EventoSismico[], context: ReportCont
   banner(1, 'SISMOCORE | Reporte de eventos sísmicos', true)
   banner(2, `Fuente: IGP / CENSIS · Cobertura: reportes del Perú en los últimos ${context.days ?? 30} días`)
   banner(3, `Generado: ${horaPeru(generatedAt)} · Hora de Perú (UTC−05:00)`)
+  if (context.requestedBy) sheet.getCell('A3').value += ` · Solicitado por: ${context.requestedBy}`
   banner(4, `Última sincronización: ${context.lastSync ? horaPeru(new Date(context.lastSync)) : 'Sin sincronizaciones registradas'}`)
   banner(5, `Filtros · Búsqueda: ${context.filters.q || 'Sin búsqueda'} · Magnitud: ${magnitudeLabels[context.filters.magnitude] || 'Todas'} · Desde (UTC): ${context.filters.since || 'Todo el periodo disponible'}`)
   banner(6, `Eventos: ${eventos.length}   |   Magnitud máxima: ${maximum}   |   Profundidad promedio: ${depth}`, true)
   banner(7, 'Observaciones registradas por la fuente. Este reporte no constituye una predicción ni una alerta oficial.')
+  if (context.cutoff) sheet.getCell('A7').value += ` Corte UTC: ${context.cutoff}. Referencia: ${context.exportId || 'Sin referencia'}.`
   sheet.getRow(8).height = 12
   sheet.addTable({
     name: 'EventosSismicos', ref: 'A9', headerRow: true,
