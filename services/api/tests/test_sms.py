@@ -79,6 +79,13 @@ class SmsApiTests(unittest.IsolatedAsyncioTestCase):
         response=await self.client.post('/api/v1/sms/pruebas',json=BODY,headers=HEADERS)
         self.assertEqual(response.status_code,503);self.mocks[3].assert_awaited_once()
         self.assertEqual(self.records[-1][1]['data']['p_estado'],'desconocida')
+
+    async def test_trial_error_preserves_code_without_inventing_cause(self):
+        self.mocks[3].side_effect=VoiceError('572003')
+        response=await self.client.post('/api/v1/sms/pruebas',json=BODY,headers=HEADERS)
+        self.assertEqual(response.status_code,503)
+        self.assertIn('572003',response.json()['detail'])
+        self.mocks[3].assert_awaited_once()
     async def test_status_owned_and_no_duplicate_terminal_poll(self):
         response=await self.client.post(f'/api/v1/sms/pruebas/{REF}/actualizar',json={},headers=HEADERS)
         self.assertEqual(response.json()['estado'],'delivered')

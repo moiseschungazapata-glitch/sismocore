@@ -14,6 +14,7 @@ admin=require_permission('voz.probar')
 def provider_error(error):
     messages={'CUENTA_NO_TRIAL':'SMS de prueba bloqueado: esta integración solo permite cuentas Trial para evitar cargos de una cuenta de pago.',
         '10002':'Tu cuenta Trial no admite esta función SMS por API. Revisa Try out SMS en Twilio.',
+        '572003':'Twilio rechazó el SMS con el código 572003. Revisa el detalle de RESPONSE y la solicitud REQUEST en Try out SMS antes de repetirlo; ese código por sí solo no identifica la causa.',
         '21608':'Twilio requiere verificar el teléfono de destino antes de enviar SMS.',
         '21408':'Twilio no permite enviar SMS a ese país con la configuración actual.',
         '21612':'Twilio no admite esta combinación de remitente y destinatario SMS.',
