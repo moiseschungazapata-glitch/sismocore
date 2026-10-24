@@ -54,12 +54,9 @@ export default function Users({ user }: { user: AuthUser }) {
     </> : <EmptyState icon="users" title="Sin cuentas para este filtro" description="Cambia los filtros o crea una cuenta para un integrante del equipo." />)}
     {!loading && !error && <div className="pagination"><span>{total} cuentas encontradas · página {query.page}</span><div><Button disabled={query.page <= 1} onClick={() => setQuery({ ...query, page:query.page - 1 })}>Anterior</Button><Button disabled={query.page * 20 >= total} onClick={() => setQuery({ ...query, page:query.page + 1 })}>Siguiente</Button></div></div>}
   </Panel>
-  <Panel title="Permisos por rol" description="Los permisos se verifican en cada operación de la API."><div className="role-cards"><Role name="Administrador" text="Gestiona cuentas y consulta todas las áreas habilitadas." /><Role name="Analista" text="Consulta el catálogo, las fuentes y exporta reportes; acceso a modelos cuando se habiliten." /><Role name="Operador de alertas" text="Consulta el catálogo y tendrá acceso al centro de alertas." /><Role name="Auditor" text="Consulta la bitácora, las fuentes y reportes; no modifica cuentas." /><Role name="Solo lectura" text="Consulta dashboard, eventos, mapa y análisis descriptivo." /></div></Panel>
   {editing && <AccountEditor key={editing === 'new' ? 'new' : editing.id} account={editing === 'new' ? null : editing} user={user} onClose={() => setEditing(null)} onSaved={saved} />}
   </div>
 }
-
-function Role({ name, text }: { name: string; text: string }) { return <article className="role-card"><h3>{name}</h3><p>{text}</p></article> }
 
 function AccountEditor({ account, user, onClose, onSaved }: { account: Account | null; user: AuthUser; onClose: () => void; onSaved: () => void }) {
   const [name, setName] = useState(account?.nombre_completo || '')
