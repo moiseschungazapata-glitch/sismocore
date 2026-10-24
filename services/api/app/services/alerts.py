@@ -4,11 +4,12 @@ from urllib.parse import urlparse
 from app.core.config import settings
 from app.services.database import database
 from app.services.push import push_sender, PushError
+from app.services.automatic_voice import process_automatic_calls
 
 
-async def process_alerts():
+async def process_push_alerts():
     if not push_sender.configured:
-        rules=await database.request('GET','reglas_alerta',params={'select':'id','activa':'eq.true','canales':'eq.{push}','limit':'1'})
+        rules=await database.request('GET','reglas_alerta',params={'select':'id','activa':'eq.true','canales':'cs.{push}','limit':'1'})
         if rules: raise RuntimeError('Hay reglas activas pero falta la credencial de Firebase en el ejecutor de sincronización.')
         return {'estado':'sin_reglas_activas','aceptadas':0,'fallidas':0}
     origin=urlparse(settings.PUBLIC_APP_URL)
@@ -31,3 +32,14 @@ async def process_alerts():
         results=await asyncio.gather(*(dispatch(row) for row in rows))
         accepted+=sum(results); failed+=len(results)-sum(results)
     return {'estado':'procesada','nuevas_entregas':queued,'aceptadas':accepted,'fallidas':failed}
+
+
+async def process_alerts():
+    # A configuration failure in one channel must not disable the other channel.
+    failures=[];push=None;voice=None
+    try: push=await process_push_alerts()
+    except Exception: failures.append('notificaciones')
+    try: voice=await process_automatic_calls()
+    except Exception: failures.append('llamadas')
+    if failures: raise RuntimeError('No se completó el procesamiento de '+', '.join(failures)+'. Revisa las credenciales y la sincronización.')
+    return {**push,'voz':voice}

@@ -67,13 +67,26 @@ class VoiceProvider:
             if isinstance(phone,str) and re.fullmatch(r'\+51[0-9]{9}',phone)}
 
     async def call(self,phone):
-        await self.check_trial()
-        if not re.fullmatch(r'\+51[0-9]{9}',phone): raise VoiceError('21219')
+        return await self._create_call(phone,self._origin()+'/api/v1/voz/prueba.xml')
+
+    def _origin(self):
         origin=urlparse(settings.PUBLIC_APP_URL)
         if origin.scheme!='https' or not origin.netloc or origin.path or origin.query or origin.fragment or origin.username or origin.password:
             raise VoiceError('URL_INVALIDA')
+        return settings.PUBLIC_APP_URL
+
+    def event_signature(self,delivery,authorization):
+        return hmac.new(settings.TWILIO_AUTH_TOKEN.encode(),f'voz-evento:{delivery}:{authorization}'.encode(),hashlib.sha256).hexdigest()
+
+    async def call_event(self,phone,delivery,authorization):
+        signature=self.event_signature(delivery,authorization)
+        return await self._create_call(phone,f'{self._origin()}/api/v1/voz/eventos/{delivery}.xml?clave={authorization}&firma={signature}')
+
+    async def _create_call(self,phone,url):
+        await self.check_trial()
+        if not re.fullmatch(r'\+51[0-9]{9}',phone): raise VoiceError('21219')
         payload=await self.request('POST','/Calls.json',data={
-            'To':phone,'From':settings.TWILIO_FROM_NUMBER,'Url':settings.PUBLIC_APP_URL+'/api/v1/voz/prueba.xml',
+            'To':phone,'From':settings.TWILIO_FROM_NUMBER,'Url':url,
         })
         if not re.fullmatch(r'CA[0-9a-fA-F]{32}',str(payload.get('sid',''))) or payload.get('status') not in STATES:
             raise VoiceError('RESPUESTA_INVALIDA')

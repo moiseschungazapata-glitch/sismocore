@@ -27,7 +27,7 @@ class RuleApiTests(unittest.IsolatedAsyncioTestCase):
         async def db(method,table,**kwargs):
             self.calls.append((table,kwargs))
             if self.error: raise self.error
-            if table.endswith('sismocore_guardar_regla_push'): return {'id':TARGET,'token':'NEVER_EXPOSE'}
+            if table.endswith('sismocore_guardar_regla_alerta'): return {'id':TARGET,'token':'NEVER_EXPOSE'}
             return []
         self.mock=patch('app.services.database.database.request',new=AsyncMock(side_effect=db));self.mock.start()
         self.client=httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://localhost:5173')
@@ -58,10 +58,17 @@ class RuleApiTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_ranges_and_empty_recipients_rejected(self):
         for change in [{'magnitud_minima':-1},{'destinatarios':[]},{'destinatarios':[USER,USER]},
-            {'nombre':'   '},{'zona':{'latitud':91,'longitud':0,'radio_km':100}},
+            {'nombre':'   '},{'canales':['sms']},{'canales':['voz','voz']},{'canales':[]},{'zona':{'latitud':91,'longitud':0,'radio_km':100}},
             {'zona':{'latitud':0,'longitud':0,'radio_km':0}}]:
             response=await self.client.post('/api/v1/alertas/reglas',headers=ORIGIN,json={**BODY,**change})
             self.assertEqual(response.status_code,422)
+        self.assertFalse(self.calls)
+
+    async def test_operator_cannot_create_voice_rule(self):
+        self.actor['rol']='operador'
+        with patch('app.services.audit.record',new=AsyncMock()):
+            response=await self.client.post('/api/v1/alertas/reglas',headers=ORIGIN,json={**BODY,'canales':['push','voz']})
+        self.assertEqual(response.status_code,403)
         self.assertFalse(self.calls)
 
     async def test_cross_origin_cannot_create_rules(self):
@@ -95,6 +102,10 @@ class RuleApiTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ProcessorTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        p=patch('app.services.alerts.process_automatic_calls',new=AsyncMock(return_value={'estado':'apagadas','aceptadas':0}))
+        p.start();self.addCleanup(p.stop)
+
     async def test_claimed_messages_only_and_result_persisted_without_tokens(self):
         delivery={'id':TARGET,'reserva_id':USER,'token':'DEVICE_SECRET','evento_id':USER,'titulo':'Sismo reportado','mensaje':'Evento observado'}
         claim=0;records=[]
@@ -128,4 +139,4 @@ class ProcessorTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_missing_worker_credential_fails_if_rules_are_active(self):
         with patch.object(PushSender,'configured',new_callable=PropertyMock,return_value=False),patch('app.services.alerts.database.request',new=AsyncMock(return_value=[{'id':TARGET}])):
-            with self.assertRaisesRegex(RuntimeError,'credencial'): await process_alerts()
+            with self.assertRaisesRegex(RuntimeError,'notificaciones'): await process_alerts()

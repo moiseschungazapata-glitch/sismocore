@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Badge, Button, ConfirmDialog, Panel } from '../../components/ui'
 import { fecha } from '../../lib/format'
 import { loadVoiceTrial, startVoiceTrial, refreshVoiceTrial, type VoiceTrial as Trial } from '../../services/voice'
+import AutomaticVoice from './AutomaticVoice'
 
 const states:Record<string,string>={solicitada:'Solicitud registrada',queued:'En cola de Twilio',initiated:'Iniciando',ringing:'Sonando',
   'in-progress':'Llamada en curso',completed:'Llamada finalizada',busy:'Teléfono ocupado',failed:'Fallida',
@@ -52,8 +53,9 @@ export default function VoiceTrial(){
       <div className="push-actions"><Button variant="primary" loading={busy} disabled={!selected||!data?.configurada||exhausted||!!limit?.espera_segundos} onClick={()=>setConfirm(true)}>Realizar llamada de prueba</Button><Button icon="refresh" disabled={busy} onClick={()=>{setError('');setRevision(value=>value+1)}}>Actualizar llamadas</Button></div>
       {message&&<p className="export-success" role="status">{message}</p>}
       {!!data?.historial.length&&<ul className="push-devices">{data.historial.map(row=><li key={row.id}><div className="push-device-details"><h3>Teléfono terminado en {row.ultimos}</h3><Badge tone={['failed','rechazada','desconocida'].includes(row.estado)?'warning':'neutral'}>{states[row.estado]||row.estado}</Badge><p>{fecha(row.fecha)} · Perú</p>{row.estado==='desconocida'&&<p>El resultado es incierto. Consulta los registros de Twilio antes de repetir la llamada.</p>}</div>{['queued','initiated','ringing','in-progress'].includes(row.estado)&&<Button disabled={busy} onClick={()=>void refresh(row.id)}>Consultar estado</Button>}</li>)}</ul>}
-      <p className="push-caption">Cada llamada puede consumir minutos de la prueba. El mensaje es breve y finaliza con una instrucción de colgar; hay un minuto de espera entre intentos. No hay llamadas automáticas ni reintentos automáticos. «Finalizada» no confirma quién contestó.</p>
+      <p className="push-caption">Cada llamada puede consumir minutos de la prueba. El mensaje es breve y finaliza con una instrucción de colgar; hay un minuto de espera entre intentos. Estas pruebas son manuales y comparten el límite con las llamadas automáticas. «Finalizada» no confirma quién contestó.</p>
     </Panel>
+    <AutomaticVoice targets={data?.destinatarios||[]} revision={revision}/>
     <ConfirmDialog open={confirm} title="¿Realizar una llamada de prueba?" description={`Se llamará a ${selected?.etiqueta||'tu teléfono seleccionado'} con el mensaje de prueba de SISMOCORE. Consumirá parte de tu cuota Trial de Twilio. No representa una alerta real.`} confirmLabel="Sí, realizar llamada" busy={busy} onCancel={()=>{if(!busy)setConfirm(false)}} onConfirm={()=>void call()}/>
   </>
 }

@@ -27,10 +27,10 @@ async def rpc(name, data):
         messages = {'PT403':(403,'Tu cuenta no está activa.'),'PT404':(404,'Este dispositivo ya no está registrado. Activa las notificaciones de nuevo.'),
                     'PT409':(409,'Alcanzaste el máximo de diez dispositivos activos.'),'PT422':(422,'Revisa los datos del dispositivo.'),
                     'PT429':(429,'Espera un minuto antes de enviar otra prueba.')}
-        if exc.code=='PT409' and name=='sismocore_guardar_regla_push':
+        if exc.code=='PT409' and name in ('sismocore_guardar_regla_push','sismocore_guardar_regla_alerta'):
             raise HTTPException(409,'No se pudo guardar la regla. Actualiza la lista y revisa que la fuente IGP esté activa; se permiten hasta veinte reglas.') from exc
-        if exc.code=='PT422' and name=='sismocore_guardar_regla_push':
-            raise HTTPException(422,'Revisa la magnitud, la zona y los destinatarios. Todos deben tener una cuenta activa.') from exc
+        if exc.code=='PT422' and name in ('sismocore_guardar_regla_push','sismocore_guardar_regla_alerta'):
+            raise HTTPException(422,'Revisa la magnitud, la zona y los destinatarios. Todos deben tener una cuenta activa; para llamadas, necesitan teléfono autorizado de administrador.') from exc
         if exc.code in messages:
             status,message = messages[exc.code]
             raise HTTPException(status,message) from exc
@@ -41,7 +41,7 @@ async def rpc(name, data):
 async def status(user=Depends(own_notifications)):
     rows = await database.request('GET','dispositivos_notificacion',params={
         'select':METADATA,'usuario_id':f'eq.{user["id"]}','activo':'eq.true','order':'actualizado_en.desc','limit':'10'})
-    rules=await database.request('GET','reglas_alerta',params={'select':'id','activa':'eq.true','canales':'eq.{push}',
+    rules=await database.request('GET','reglas_alerta',params={'select':'id','activa':'eq.true','canales':'cs.{push}',
         'destinatarios':'cs.'+json.dumps([user['id']]),'limit':'1'})
     return {'configurada':push_sender.configured,
             'dispositivos':[{key:row.get(key) for key in METADATA.split(',')} for row in rows],

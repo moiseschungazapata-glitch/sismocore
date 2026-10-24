@@ -16,7 +16,7 @@ try{
    else if(path.endsWith('/notificaciones')) data={configurada:true,dispositivos:[],automaticas_activas:false}
    else if(path.endsWith('/eventos')) data={eventos:[],total:0,periodo_dias:30,codigo_fuente:'igp',consultado_en:new Date().toISOString()}
    else if(path.endsWith('/alertas/historial')) data={entregas:[]}
-   else if(path.endsWith('/alertas/reglas')&&route.request().method()==='GET'){ruleReads++;data={reglas:rules,destinatarios:[{id:actor,nombre_completo:'Prueba local',rol:'administrador'}]}}
+   else if(path.endsWith('/alertas/reglas')&&route.request().method()==='GET'){ruleReads++;data={permite_voz:true,reglas:rules,destinatarios:[{id:actor,nombre_completo:'Prueba local',rol:'administrador',voz_activa:true,voz_ultimos:'1234'}]}}
    else if(path.includes('/alertas/reglas')&&['POST','PATCH'].includes(route.request().method())){
     const body=route.request().postDataJSON();saves++
     rules=[{...body,id:ruleId,version:saves,zona:body.zona||{},vigente_desde:new Date().toISOString()}]
@@ -44,11 +44,12 @@ try{
   assert.equal(saves,0)
   await page.getByRole('button',{name:'Nueva regla',exact:true}).click()
   await page.getByLabel('Nombre de la regla').fill('Sismos del Peru')
+  await page.getByLabel('Canal de aviso').selectOption('ambos')
   await page.getByLabel('Activar al guardar').check()
   await page.getByRole('button',{name:'Revisar regla'}).click()
   await page.getByRole('button',{name:'Confirmar y guardar'}).click()
   await page.getByRole('heading',{name:'Sismos del Peru',exact:true}).waitFor()
-  assert.equal(saves,1);assert.equal(rules[0].activa,true);assert.deepEqual(rules[0].destinatarios,[actor])
+  assert.equal(saves,1);assert.equal(rules[0].activa,true);assert.deepEqual(rules[0].canales,['push','voz']);assert.deepEqual(rules[0].destinatarios,[actor])
   await page.getByRole('button',{name:'Pausar',exact:true}).click()
   await page.getByRole('button',{name:'Confirmar y guardar'}).click()
   await page.getByRole('button',{name:'Activar',exact:true}).waitFor()

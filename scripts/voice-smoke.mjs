@@ -8,13 +8,17 @@ try{
  for(const mobile of [false,true]){
   const context=await browser.newContext({viewport:mobile?{width:393,height:851}:{width:1365,height:900},isMobile:mobile,hasTouch:mobile})
   const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message))
-  let calls=0;let completed=false;let configured=true;let role='administrador';let voiceReads=0
+  let linked=false;let enabled=false;let writes=0;let calls=0;let completed=false;let configured=true;let role='administrador';let voiceReads=0
   await page.route('**/api/v1/**',async route=>{
    const path=new URL(route.request().url()).pathname;let json={}
    if(path.endsWith('/auth/me'))json={user:{id:'11111111-1111-4111-8111-111111111111',nombre_completo:'Prueba local',email:'test@example.invalid',rol:role,estado:'activo',permisos:['catalogo.leer','notificaciones.propias',...(role==='administrador'?['voz.probar']:[])]}}
    else if(path.endsWith('/notificaciones'))json={configurada:true,dispositivos:[],automaticas_activas:false}
    else if(path.endsWith('/eventos'))json={eventos:[],total:0,codigo_fuente:'igp',periodo_dias:30,consultado_en:new Date().toISOString()}
    else if(path.endsWith('/alertas/historial'))json={entregas:[]}
+   else if(path.endsWith('/voz/automaticas')&&route.request().method()==='GET')json={configurada:configured,habilitadas:enabled,cuenta_coincide:true,telefono:{activo:linked,ultimos:linked?'1234':null,autorizado_en:null}}
+   else if(path.endsWith('/voz/telefono')){assert.equal(route.request().postDataJSON().confirmado,true);linked=true;writes++;json={message:'Teléfono autorizado'}}
+   else if(path.endsWith('/voz/automaticas')){assert.equal(route.request().postDataJSON().confirmado,true);enabled=route.request().postDataJSON().activa;writes++;json={message:'Configuración guardada'}}
+   else if(path.endsWith('/voz/telefono/desactivar')){linked=false;writes++;json={message:'Autorización retirada'}}
    else if(path.endsWith('/voz/pruebas')&&route.request().method()==='GET'){
     voiceReads++
     json={configurada:configured,automaticas:false,destinatarios:configured?[{id:'a'.repeat(64),etiqueta:'Perú · celular terminado en 1234'}]:[],
@@ -32,6 +36,7 @@ try{
   const button=page.getByRole('button',{name:'Realizar llamada de prueba',exact:true})
   await page.getByLabel('Destinatario de la llamada de prueba').waitFor()
   assert.equal(await button.isDisabled(),true)
+  assert.equal(await page.getByRole('button',{name:'Habilitar llamadas automáticas',exact:true}).isDisabled(),true)
   await page.getByLabel('Destinatario de la llamada de prueba').selectOption('a'.repeat(64))
   await button.click()
   await page.getByRole('button',{name:'Cancelar',exact:true}).click();assert.equal(calls,0)
@@ -46,6 +51,21 @@ try{
   assert.equal(await button.isDisabled(),true)
   await page.getByRole('button',{name:'Consultar estado',exact:true}).click()
   await page.getByText('Llamada finalizada',{exact:true}).waitFor()
+  await page.getByLabel('Tu teléfono verificado').selectOption('a'.repeat(64))
+  await page.getByRole('button',{name:'Autorizar mi teléfono',exact:true}).click()
+  await page.getByRole('button',{name:'Cancelar',exact:true}).click();assert.equal(writes,0)
+  await page.getByRole('button',{name:'Autorizar mi teléfono',exact:true}).click()
+  await page.getByRole('button',{name:'Sí, confirmar',exact:true}).click()
+  await page.getByRole('button',{name:'Retirar autorización',exact:true}).waitFor();assert.equal(writes,1);assert.equal(enabled,false)
+  await page.getByRole('button',{name:'Habilitar llamadas automáticas',exact:true}).click()
+  await page.getByRole('button',{name:'Cancelar',exact:true}).click();assert.equal(enabled,false)
+  await page.getByRole('button',{name:'Habilitar llamadas automáticas',exact:true}).click()
+  await page.getByRole('button',{name:'Sí, confirmar',exact:true}).click()
+  await page.getByRole('button',{name:'Pausar llamadas automáticas',exact:true}).waitFor();assert.equal(enabled,true)
+  await page.getByRole('button',{name:'Pausar llamadas automáticas',exact:true}).click()
+  await page.getByRole('button',{name:'Sí, confirmar',exact:true}).click()
+  await page.getByRole('button',{name:'Habilitar llamadas automáticas',exact:true}).waitFor();assert.equal(enabled,false);assert.equal(calls,1)
+  await page.evaluate(()=>{document.activeElement?.blur();window.scrollTo(0,0)})
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
   await page.screenshot({path:`.runtime/voice-${mobile?'android':'desktop'}.png`,fullPage:true})
   configured=false

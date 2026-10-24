@@ -1,11 +1,13 @@
 from uuid import UUID
 from typing import Literal
-from fastapi import APIRouter, Response, Depends, Request, HTTPException
+from fastapi import APIRouter, Response, Depends, Request, HTTPException, Query
+import hmac
 from pydantic import BaseModel, ConfigDict, Field
 from app.api.routes.auth import guard
 from app.services.database import database, DatabaseError
 from app.services.permissions import require_permission
 from app.services.voice import voice_provider, VoiceError
+from app.services.automatic_voice import event_twiml
 
 router = APIRouter(prefix='/voz', tags=['Prueba de voz'])
 admin = require_permission('voz.probar')
@@ -24,9 +26,27 @@ async def trial_instructions():
     return Response(content=TRIAL_TWIML, media_type='application/xml')
 
 
+@router.api_route('/eventos/{delivery}.xml',methods=['GET','POST'],response_class=Response)
+async def event_instructions(delivery:UUID,clave:UUID,firma:str=Query(pattern=r'^[a-f0-9]{64}$')):
+    denied=Response(content='<Response><Hangup/></Response>',status_code=403,media_type='application/xml')
+    if not voice_provider.configured or not hmac.compare_digest(firma,voice_provider.event_signature(str(delivery),str(clave))): return denied
+    context=await database.request('POST','rpc/sismocore_contenido_llamada',data={
+        'p_id':str(delivery),'p_clave':str(clave),'p_cuenta':voice_provider.account_hash})
+    if not context: return denied
+    try: content=event_twiml(context)
+    except (ValueError,TypeError,KeyError): return denied
+    return Response(content=content,media_type='application/xml')
+
+
 class CallRequest(BaseModel):
     model_config=ConfigDict(extra='forbid')
     destino_id:str=Field(pattern=r'^[a-f0-9]{64}$')
+    confirmado:Literal[True]
+
+
+class AutomaticSwitch(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    activa:bool
     confirmado:Literal[True]
 
 
@@ -55,13 +75,16 @@ async def voice_rpc(name,data):
             'PT409':(409,'Se alcanzó el límite de pruebas de SISMOCORE: cinco intentos por día y cincuenta en total.')}
         if failure.code in messages:
             status,message=messages[failure.code]
+            if name in ('sismocore_configurar_telefono_voz','sismocore_interruptor_voz'):
+                message='No se pudo actualizar la configuración. Completa una prueba manual, verifica tu teléfono y actualiza la página.'
             raise HTTPException(status,message) from failure
+        if failure.code=='PT422': raise HTTPException(422,'Completa una llamada de prueba desde tu cuenta antes de autorizar este teléfono.') from failure
         raise
 
 
 async def history_for(user):
     claims=await database.request('GET','auditoria',params={'select':'id,ocurrido_en,despues','actor_id':'eq.'+user['id'],
-        'accion':'eq.voz.solicitar','despues->>cuenta':'eq.'+voice_provider.account_hash,'order':'ocurrido_en.desc,id','limit':'10'})
+        'accion':'eq.voz.solicitar','entidad':'eq.voz_pruebas','despues->>cuenta':'eq.'+voice_provider.account_hash,'order':'ocurrido_en.desc,id','limit':'10'})
     if not claims: return []
     states=await database.request('GET','auditoria',params={'select':'entidad_id,despues,ocurrido_en','actor_id':'eq.'+user['id'],
         'accion':'eq.voz.estado','entidad_id':'in.('+','.join(row['id'] for row in claims)+')','order':'ocurrido_en.desc,id','limit':'100'})
@@ -121,3 +144,49 @@ async def update_test(reference:UUID,request:Request,user=Depends(admin)):
         await voice_rpc('sismocore_registrar_estado_voz',{'p_actor':user['id'],'p_referencia':str(reference),
             'p_estado':state,'p_sid':row['proveedor_id'],'p_error':None})
     return {'estado':state}
+
+
+@router.get('/automaticas')
+async def automatic_settings(user=Depends(admin)):
+    rows=await database.request('GET','perfiles',params={'select':'voz_activa,voz_ultimos,voz_cuenta_hash,voz_consentimiento_en','id':'eq.'+user['id'],'limit':'1'})
+    profile=rows[0] if rows else {}
+    sources=await database.request('GET','fuentes_datos',params={'select':'limites','codigo':'eq.igp','limit':'1'})
+    flags=sources[0].get('limites',{}) if sources else {}
+    return {'configurada':voice_provider.configured,'habilitadas':flags.get('voz_habilitada') is True,
+        'cuenta_coincide':flags.get('voz_cuenta')==voice_provider.account_hash,
+        'telefono':{'activo':profile.get('voz_activa') is True and profile.get('voz_cuenta_hash')==voice_provider.account_hash,
+            'ultimos':profile.get('voz_ultimos'),'autorizado_en':profile.get('voz_consentimiento_en')}}
+
+
+@router.post('/telefono')
+async def link_phone(body:CallRequest,request:Request,user=Depends(admin)):
+    guard(request,'voice')
+    try: numbers=await voice_provider.recipients()
+    except VoiceError as failure: raise provider_error(failure) from failure
+    phone=numbers.get(body.destino_id)
+    if not phone: raise HTTPException(422,'Selecciona un teléfono disponible de la cuenta Trial.')
+    await voice_rpc('sismocore_configurar_telefono_voz',{'p_actor':user['id'],'p_cuenta':voice_provider.account_hash,
+        'p_destino':body.destino_id,'p_ultimos':phone[-4:],'p_activa':True,'p_correlacion':request.state.correlation_id})
+    return {'message':'Teléfono autorizado para recibir las llamadas de las reglas que te incluyan. Revisa el control general antes de habilitarlas.'}
+
+
+@router.post('/telefono/desactivar')
+async def unlink_phone(request:Request,user=Depends(admin)):
+    guard(request,'voice')
+    await voice_rpc('sismocore_configurar_telefono_voz',{'p_actor':user['id'],'p_cuenta':None,'p_destino':None,'p_ultimos':None,
+        'p_activa':False,'p_correlacion':request.state.correlation_id})
+    return {'message':'Autorización de llamadas retirada. Se cancelaron tus llamadas pendientes; alguna que ya estuviera en curso podría terminar.'}
+
+
+@router.post('/automaticas')
+async def automatic_switch(body:AutomaticSwitch,request:Request,user=Depends(admin)):
+    guard(request,'voice')
+    if body.activa:
+        try: await voice_provider.check_trial()
+        except VoiceError as failure: raise provider_error(failure) from failure
+        rows=await database.request('GET','perfiles',params={'select':'id','id':'eq.'+user['id'],
+            'voz_activa':'eq.true','voz_cuenta_hash':'eq.'+voice_provider.account_hash,'limit':'1'})
+        if not rows: raise HTTPException(422,'Vincula primero tu teléfono y autoriza las llamadas.')
+    await voice_rpc('sismocore_interruptor_voz',{'p_actor':user['id'],'p_cuenta':voice_provider.account_hash,
+        'p_activa':body.activa,'p_correlacion':request.state.correlation_id})
+    return {'message':'Llamadas automáticas habilitadas para eventos posteriores a este momento.' if body.activa else 'Llamadas automáticas pausadas; las que ya estén en curso podrían terminar.'}
