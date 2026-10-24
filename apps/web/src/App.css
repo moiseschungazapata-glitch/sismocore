@@ -171,11 +171,33 @@ input::placeholder { color: var(--subtle); opacity: 1; }
 .service-message--danger { background: #2c1d29; color: #ffb2bc; border-color: #75404e; }
 .service-message .button { flex-shrink: 0; align-self: center; }
 .section-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
-.bar-chart { padding: 5px 0; }
-.bar-row { display: grid; grid-template-columns: 112px minmax(10px, 1fr) 24px; align-items: center; gap: 12px; margin: 18px 0; font-size: 12px; color: var(--muted); }
-.bar-row strong { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
-.bar-track { background: #213147; height: 16px; border-radius: 4px; }
-.bar-track > div { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #428baf, #63c5d4); }
+.analysis-grid { display: grid; grid-template-columns: minmax(250px,.85fr) minmax(0,1.4fr); gap: 22px; align-items: start; }
+.analysis-grid > .panel { min-width: 0; }
+.magnitude-distribution { display: grid; gap: 25px; padding: 8px 0 24px; }
+.distribution-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 11px; font-size: 12px; color: var(--muted); }
+.distribution-label > span { display: inline-flex; align-items: center; gap: 9px; }
+.distribution-label i { width: 9px; height: 9px; border-radius: 50%; }
+.distribution-label strong { display: inline-flex; align-items: baseline; gap: 12px; color: var(--text); font-size: 17px; font-variant-numeric: tabular-nums; }
+.distribution-label small { color: var(--muted); font-size: 11px; font-weight: 400; min-width: 42px; text-align: right; }
+.distribution-track { height: 9px; border-radius: 5px; overflow: hidden; background: #213147; }
+.distribution-track > div { height: 100%; border-radius: inherit; }
+.distribution-note, .daily-chart-note { color: var(--muted); font-size: 11px; line-height: 1.7; }
+.distribution-note { border-top: 1px solid var(--border); padding-top: 17px; }
+.daily-chart { width: 100%; min-width: 0; }
+.daily-chart svg { display: block; width: 100%; height: auto; }
+.chart-gridline { stroke: #2b3b50; stroke-width: 1; stroke-dasharray: 3 5; }
+.chart-axis-label, .chart-axis-title { fill: #a5b7cc; font: 11px 'Segoe UI',sans-serif; }
+.daily-bar { fill: #63c9d5; }
+.daily-bar:hover { fill: #b0f0f3; }
+.daily-chart-note { margin-top: 7px; }
+.daily-data { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 14px; font-size: 12px; }
+.daily-data summary { width: fit-content; color: var(--accent); cursor: pointer; padding: 3px 0; }
+.daily-table-scroll { max-height: 260px; overflow: auto; margin-top: 14px; border: 1px solid var(--border); border-radius: 8px; }
+.daily-data table { width: 100%; border-collapse: collapse; text-align: left; }
+.daily-data th { position: sticky; top: 0; background: #19283b; color: var(--muted); }
+.daily-data th, .daily-data td { padding: 10px 13px; border-bottom: 1px solid var(--border); }
+.daily-data th:last-child, .daily-data td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 1100px) { .analysis-grid { grid-template-columns: minmax(0,1fr); gap: 0; } }
 .chart-note, .context-note { font-size: 11px; color: var(--subtle); line-height: 1.8; margin-top: 20px; }
 .context-note { margin-top: 0; }
 .map-frame { height: 440px; border-radius: 10px; overflow: hidden; isolation: isolate; position: relative; border: 1px solid #38506b; }
