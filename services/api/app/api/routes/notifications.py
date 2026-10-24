@@ -116,5 +116,5 @@ async def test(device_id: UUID, request: Request, user=Depends(own_notifications
                     'AUTHENTICATION_ERROR':'Revisa la credencial privada de Firebase en el servidor.',
                     'PERMISSION_DENIED':'Firebase rechazó el envío. Revisa el proyecto, la API FCM y los permisos de la cuenta de servicio.'}
         raise HTTPException(503,messages.get(error,'No se pudo confirmar el envío. Espera un minuto antes de volver a probar.'))
-    return {'message':'Firebase aceptó la notificación de prueba. Comprueba su recepción en este dispositivo.',
+    return {'message':'Firebase aceptó la notificación de prueba. Comprueba su recepción en el dispositivo seleccionado.',
             'estado':'aceptada','correlacion_id':request.state.correlation_id}

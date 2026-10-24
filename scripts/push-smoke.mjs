@@ -11,15 +11,15 @@ try {
     await context.addInitScript(({id,userId}) => localStorage.setItem('sismocore.push-device.v1',JSON.stringify({id,userId})),{id,userId:user.id})
     const page=await context.newPage()
     const errors=[]; page.on('pageerror',error=>errors.push(error.message))
-    let role='administrador';let automatic=true;let switches=0;let configured=false; let active=true; let sends=0; let deactivations=0
+    let remoteVisible=false;let role='administrador';let automatic=true;let switches=0;let configured=false; let active=true; let sends=0; let deactivations=0
     await page.route('**/api/v1/**',async route => {
       const path=new URL(route.request().url()).pathname
       let body={}
       if (path.endsWith('/alertas/historial')) body={entregas:[]}
       else if (path.endsWith('/auth/me')) body={user:{...user,rol:role,permisos:[...user.permisos,...(role==='administrador'?['usuarios.administrar']:[])]}}
-      else if(path.endsWith('/notificaciones')) body={configurada:configured,automaticas_activas:automatic,automaticas_habilitadas:automatic,reglas_activas:true,puede_configurar_automaticas:role==='administrador',dispositivos:active ? [{id,etiqueta:'Chrome en Android',activo:true,registrado_en:'2026-10-24T01:00:00Z',ultima_prueba_en:null}] : []}
+      else if(path.endsWith('/notificaciones')) body={configurada:configured,automaticas_activas:automatic,automaticas_habilitadas:automatic,reglas_activas:true,puede_configurar_automaticas:role==='administrador',dispositivos:active ? [{id,etiqueta:'Chrome en Android',activo:true,registrado_en:'2026-10-24T01:00:00Z',ultima_prueba_en:null},...(remoteVisible?[{id:'33333333-3333-4333-8333-333333333333',etiqueta:'Otro Android',activo:true,registrado_en:'2026-10-24T01:00:00Z',ultima_prueba_en:null}]:[])] : []}
       else if(path.endsWith('/notificaciones/automaticas')){const data=route.request().postDataJSON();assert.equal(data.confirmado,true);automatic=data.activa;switches++;body={message:automatic?'Notificaciones automáticas habilitadas.':'Notificaciones automáticas pausadas.'}}
-      else if(path.endsWith('/prueba')) { sends++; body={estado:'aceptada',message:'Firebase aceptó la notificación de prueba. Comprueba su recepción en este dispositivo.'} }
+      else if(path.endsWith('/prueba')) { sends++; body={estado:'aceptada',message:'Firebase aceptó la notificación de prueba. Comprueba su recepción en el dispositivo seleccionado.'} }
       else if(path.endsWith('/desactivar')) { deactivations++; active=false; body={message:'Desactivado'} }
       else if(path.endsWith('/eventos')) body={eventos:[],total:0,periodo_dias:30,codigo_fuente:'igp',consultado_en:new Date().toISOString()}
       else throw new Error('API inesperada: '+path)
@@ -45,8 +45,17 @@ try {
     assert.equal(sends,0)
     await page.getByRole('button',{name:'Enviar prueba',exact:true}).click()
     await page.getByRole('dialog').getByRole('button',{name:'Enviar prueba',exact:true}).click()
-    await page.getByText('Firebase aceptó la notificación de prueba. Comprueba su recepción en este dispositivo.',{exact:true}).waitFor()
+    await page.getByText('Firebase aceptó la notificación de prueba. Comprueba su recepción en el dispositivo seleccionado.',{exact:true}).waitFor()
     assert.equal(sends,1);assert.equal(automatic,false)
+    remoteVisible=true;await page.getByRole('button',{name:'Actualizar lista'}).click()
+    const remoteRow=page.locator('.push-devices > li').filter({has:page.getByRole('heading',{name:'Otro Android',exact:true})})
+    await remoteRow.getByRole('button',{name:'Enviar prueba',exact:true}).click()
+    await page.getByRole('dialog').getByText(/Otro Android/).waitFor()
+    await page.getByRole('button',{name:'Cancelar',exact:true}).click();assert.equal(sends,1)
+    await remoteRow.getByRole('button',{name:'Enviar prueba',exact:true}).click()
+    const remoteRequest=page.waitForRequest(request=>request.url().includes('/dispositivos/33333333-3333-4333-8333-333333333333/prueba'))
+    await page.getByRole('dialog').getByRole('button',{name:'Enviar prueba',exact:true}).click();await remoteRequest
+    await page.getByRole('dialog').waitFor({state:'hidden'});assert.equal(sends,2)
     await page.getByRole('button',{name:'Habilitar notificaciones automáticas',exact:true}).click()
     await page.getByRole('button',{name:'Sí, habilitar notificaciones',exact:true}).click()
     await page.getByRole('button',{name:'Pausar notificaciones automáticas',exact:true}).waitFor()
@@ -71,7 +80,7 @@ try {
       return url
     })
     assert.ok(worker?.endsWith('/firebase-messaging-sw.js'))
-    await page.getByRole('button',{name:'Desactivar',exact:true}).click()
+    await page.locator('.push-devices > li').filter({has:page.getByRole('heading',{name:/^Chrome en Android/})}).getByRole('button',{name:'Desactivar',exact:true}).click()
     await page.getByRole('dialog').getByRole('button',{name:'Desactivar',exact:true}).click()
     await page.getByText('Aún no tienes dispositivos activados.',{exact:false}).waitFor()
     assert.equal(deactivations,1)
