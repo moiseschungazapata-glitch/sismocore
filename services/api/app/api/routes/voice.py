@@ -120,7 +120,7 @@ async def voice_rpc(name,data):
     except DatabaseError as failure:
         messages={'PT403':(403,'Solo un administrador activo puede realizar esta prueba.'),
             'PT404':(404,'No se encontró esta prueba en tu cuenta.'),'PT429':(429,'Espera un minuto antes de realizar otra llamada.'),
-            'PT409':(409,'Se alcanzó el límite de pruebas de SISMOCORE: cinco intentos por día y cincuenta en total.')}
+            'PT409':(409,'Se alcanzó el límite de intentos de SISMOCORE. Consulta el contador diario de llamadas; el límite total es cincuenta.')}
         if failure.code in messages:
             status,message=messages[failure.code]
             if name in ('sismocore_configurar_telefono_voz','sismocore_interruptor_voz'):

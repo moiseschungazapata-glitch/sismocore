@@ -49,6 +49,9 @@ try {
   console.log('SMS automaticos: consentimiento, pausa, antiguedad, cuota compartida y deduplicacion comprobados.');
   await db.exec(await readFile(new URL('./interruptor_push.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('./verificacion_voz.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../migrations/20261024000900_limite_temporal_voz.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('./limite_temporal_voz.sql',import.meta.url),'utf8'));
+  console.log('Cuota temporal de voz: diez solo el 24/10 en Perú, bloqueo y regreso a cinco comprobados.');
   console.log('Verificacion telefonica: cuota compartida, privacidad y consentimiento independiente comprobados.');
   console.log('Interruptor de notificaciones: permisos, pausa, pruebas manuales y reactivacion sin historial comprobados.');
   console.log('Consentimiento, interruptor, canales, cuota compartida y deduplicacion de llamadas comprobados.');
