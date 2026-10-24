@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Badge, Button, Dialog, EmptyState, Panel } from '../../components/ui'
+import { Badge, Button, ConfirmDialog, Dialog, EmptyState, Panel } from '../../components/ui'
 import { Icon } from '../../components/Icon'
 import { fecha } from '../../lib/format'
 import { permissionNames, roleNames } from '../../lib/permissions'
@@ -65,19 +65,25 @@ function AccountEditor({ account, user, onClose, onSaved }: { account: Account |
   const [role, setRole] = useState<AuthUser['rol']>(account?.rol || 'lectura')
   const [state, setState] = useState<Account['estado']>(account?.estado || 'pendiente')
   const [busy, setBusy] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState('')
   const own = account?.id === user.id
 
-  async function submit(event: FormEvent) {
-    event.preventDefault(); setError(''); setBusy(true)
+  function submit(event: FormEvent) {
+    event.preventDefault(); setError(''); setConfirming(true)
+  }
+  async function save() {
+    if (busy) return
+    setBusy(true)
     try {
       if (account) await updateAccount(account.id, { nombre_completo:name.trim(), rol:role, estado:state, actualizado_en:account.actualizado_en })
       else await createAccount({ nombre_completo:name.trim(), email:email.trim(), password, rol:role, estado:state })
       setPassword(''); onSaved()
-    } catch (failure) { setError(failure instanceof Error ? failure.message : 'No se pudo guardar la cuenta.') }
+    } catch (failure) { setConfirming(false); setError(failure instanceof Error ? failure.message : 'No se pudo guardar la cuenta.') }
     finally { setBusy(false) }
   }
-  return <Dialog open title={account ? 'Editar cuenta' : 'Crear usuario'} eyebrow="USUARIOS Y PERMISOS" description={account ? account.email : 'La identidad y contraseña se gestionan únicamente en Supabase Auth.'} busy={busy} onClose={onClose}><form className="account-form" onSubmit={event => void submit(event)} aria-busy={busy}>
+  const suspending = Boolean(account && account.estado !== 'suspendido' && state === 'suspendido')
+  return <><Dialog open title={account ? 'Editar cuenta' : 'Crear usuario'} eyebrow="USUARIOS Y PERMISOS" description={account ? account.email : 'La identidad y contraseña se gestionan únicamente en Supabase Auth.'} busy={busy} onClose={onClose}><form className="account-form" onSubmit={submit} aria-busy={busy}>
     <label className="field"><span>Nombre completo</span><input name="name" autoComplete="name" value={name} minLength={2} maxLength={120} required disabled={busy} onChange={event => setName(event.target.value)} /></label>
     {!account && <><label className="field"><span>Correo electrónico</span><input name="email" type="email" autoComplete="off" required maxLength={254} value={email} disabled={busy} onChange={event => setEmail(event.target.value)} /></label><label className="field"><span id="account-password-label">Contraseña inicial</span><input aria-labelledby="account-password-label" aria-describedby="account-password-help" name="password" type="password" autoComplete="new-password" required minLength={12} maxLength={1024} value={password} disabled={busy} onChange={event => setPassword(event.target.value)} /><small id="account-password-help">Al menos 12 caracteres. No se guarda en el código ni en la tabla de perfiles.</small></label></>}
     <div className="account-form-pair"><label className="field"><span>Rol de la cuenta</span><select value={role} disabled={busy || own} onChange={event => setRole(event.target.value as AuthUser['rol'])}>{Object.entries(roleNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="field"><span>Estado de la cuenta</span><select value={state} disabled={busy || own} onChange={event => setState(event.target.value as Account['estado'])}>{Object.entries(states).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
@@ -86,4 +92,7 @@ function AccountEditor({ account, user, onClose, onSaved }: { account: Account |
     {error && <p className="admin-error" role="alert">{error}</p>}
     <div className="admin-form-actions"><Button disabled={busy} onClick={onClose}>Cancelar</Button><Button type="submit" variant="primary" loading={busy}>{account ? 'Guardar cambios' : 'Crear cuenta'}</Button></div>
   </form></Dialog>
+  <ConfirmDialog open={confirming} title={!account ? '¿Crear esta cuenta?' : suspending ? '¿Suspender esta cuenta?' : '¿Guardar estos cambios?'} description={suspending ? 'La cuenta perderá el acceso a la plataforma al confirmar.' : 'Revisa los datos antes de confirmar la operación.'} confirmLabel={account ? 'Confirmar cambios' : 'Sí, crear cuenta'} danger={suspending} busy={busy} onCancel={() => { if (!busy) setConfirming(false) }} onConfirm={() => void save()}>
+    <dl className="confirmation-summary"><div><dt>Usuario</dt><dd>{name.trim()}</dd></div><div><dt>Correo</dt><dd>{account?.email || email.trim()}</dd></div><div><dt>Rol</dt><dd>{account && account.rol !== role ? `${roleNames[account.rol]} → ` : ''}{roleNames[role]}</dd></div><div><dt>Estado</dt><dd>{account && account.estado !== state ? `${states[account.estado]} → ` : ''}{states[state]}</dd></div></dl>
+  </ConfirmDialog></>
 }

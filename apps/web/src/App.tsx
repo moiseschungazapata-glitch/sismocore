@@ -8,7 +8,7 @@ import { fecha, number } from './lib/format'
 import { containDialogFocus } from './lib/accessibility'
 import { descargarReporte } from './lib/export'
 import { Icon, type IconName } from './components/Icon'
-import { Badge, Button, Dialog, EmptyState, LoadingState, Metric, Panel } from './components/ui'
+import { Badge, Button, ConfirmDialog, Dialog, EmptyState, LoadingState, Metric, Panel } from './components/ui'
 import { EventTable, Magnitude } from './components/EventTable'
 import { Filters } from './components/Filters'
 import { Statistics } from './components/Statistics'
@@ -31,6 +31,7 @@ function Monitoring({ user, onLogout }: { user: AuthUser; onLogout: () => Promis
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState('')
   const [signingOut, setSigningOut] = useState(false)
+  const [confirmLogout, setConfirmLogout] = useState(false)
   const drawer = useRef<HTMLDialogElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const previousPath = useRef(path)
@@ -92,13 +93,20 @@ function Monitoring({ user, onLogout }: { user: AuthUser; onLogout: () => Promis
   }
 
   function openMenu() { drawer.current?.showModal(); setMenuOpen(true) }
+  async function logout() {
+    if (signingOut) return
+    setSigningOut(true)
+    try { await onLogout() }
+    finally { setSigningOut(false); setConfirmLogout(false) }
+  }
   const tableProps = { events, onDetail: setSelected, onClear: clearFilters }
   const connectionIcon = connection.icon as IconName
 
   return <div className="app">
+    <ConfirmDialog open={confirmLogout} title="¿Cerrar sesión?" description="Tendrás que iniciar sesión de nuevo para acceder a SISMOCORE." confirmLabel="Sí, cerrar sesión" busy={signingOut} onCancel={() => { if (!signingOut) setConfirmLogout(false) }} onConfirm={() => void logout()} />
     <a className="skip-link" href="#contenido">Saltar al contenido</a>
-    <header className="topbar"><div className="topbar-brand"><Button variant="ghost" icon="menu" className="menu-toggle icon-button" aria-label="Abrir menú de navegación" aria-controls="mobile-menu" aria-expanded={menuOpen} onClick={openMenu} /><Link className="brand" href={route('/')} title="Ir al dashboard"><span className="brand-icon"><Icon name="wave" size={26} /></span><span><span className="brand-name">SISMO<span>CORE</span></span><span className="brand-caption">MONITOREO SÍSMICO</span></span></Link></div><div className="topbar-right"><span className="topbar-description">Observaciones, análisis y seguimiento</span><Button variant="ghost" icon="logout" className="session-mobile" aria-label="Cerrar sesión" loading={signingOut} onClick={() => { setSigningOut(true); void onLogout().finally(() => setSigningOut(false)) }} /><div className="system-status" role="status" aria-label={connection.label}><Badge tone={connection.tone} icon={connectionIcon}><span className="status-full">{connection.label}</span><span className="status-short" aria-hidden="true">{connection.short}</span></Badge></div></div></header>
-    <aside className="sidebar" aria-label="Menú lateral">{navigation()}<div className="sidebar-footer"><span className="source-mark"><Icon name="users" size={18} /></span><div className="session-account"><strong>{user.nombre_completo || user.email}</strong><p>{roleNames[user.rol]}</p><Button className="session-logout" variant="ghost" icon="logout" loading={signingOut} onClick={() => { setSigningOut(true); void onLogout().finally(() => setSigningOut(false)) }}>Cerrar sesión</Button></div></div></aside>
+    <header className="topbar"><div className="topbar-brand"><Button variant="ghost" icon="menu" className="menu-toggle icon-button" aria-label="Abrir menú de navegación" aria-controls="mobile-menu" aria-expanded={menuOpen} onClick={openMenu} /><Link className="brand" href={route('/')} title="Ir al dashboard"><span className="brand-icon"><Icon name="wave" size={26} /></span><span><span className="brand-name">SISMO<span>CORE</span></span><span className="brand-caption">MONITOREO SÍSMICO</span></span></Link></div><div className="topbar-right"><span className="topbar-description">Observaciones, análisis y seguimiento</span><Button variant="ghost" icon="logout" className="session-mobile" aria-label="Cerrar sesión" loading={signingOut} onClick={() => setConfirmLogout(true)} /><div className="system-status" role="status" aria-label={connection.label}><Badge tone={connection.tone} icon={connectionIcon}><span className="status-full">{connection.label}</span><span className="status-short" aria-hidden="true">{connection.short}</span></Badge></div></div></header>
+    <aside className="sidebar" aria-label="Menú lateral">{navigation()}<div className="sidebar-footer"><span className="source-mark"><Icon name="users" size={18} /></span><div className="session-account"><strong>{user.nombre_completo || user.email}</strong><p>{roleNames[user.rol]}</p><Button className="session-logout" variant="ghost" icon="logout" loading={signingOut} onClick={() => setConfirmLogout(true)}>Cerrar sesión</Button></div></div></aside>
     <dialog className="mobile-drawer" id="mobile-menu" ref={drawer} aria-labelledby="mobile-menu-title" onKeyDown={containDialogFocus} onClose={() => setMenuOpen(false)} onClick={event => { if (event.target === event.currentTarget) drawer.current?.close() }}><div className="drawer-shell"><div className="drawer-header"><h2 id="mobile-menu-title">Navegación</h2><Button variant="ghost" icon="close" className="icon-button" aria-label="Cerrar menú" onClick={() => drawer.current?.close()} /></div>{navigation(true)}<div className="drawer-account"><strong>{user.nombre_completo || user.email}</strong><p>{roleNames[user.rol]}</p></div><p className="drawer-note">Fuente de datos: IGP / CENSIS<br />Almacenamiento: Supabase</p></div></dialog>
     <main className="main-content" id="contenido" tabIndex={-1}>
       <div className="page-heading"><div><p className="eyebrow">{page?.group || 'NAVEGACIÓN'}<span className="eyebrow-separator">/</span>SISMOCORE</p><h1 ref={heading} tabIndex={-1}>{page?.heading || 'Página no encontrada'}</h1><p className="subtitle">{page?.description || 'La dirección no corresponde a un módulo de la plataforma.'}</p></div>{page && allowed && !pending && !administrative && <Button variant="primary" icon="refresh" onClick={() => void cargar()} loading={actualizando}>{actualizando ? 'Consultando…' : 'Actualizar datos'}</Button>}</div>

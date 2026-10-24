@@ -102,6 +102,7 @@ try {
   await page.getByRole('button', { name: 'Actualizar datos', exact: true }).click();
   const lateCatalog = await heldCatalog;
   await page.getByRole('button', { name: 'Cerrar sesión', exact: true }).filter({ visible: true }).click();
+  await page.getByRole('dialog', { name:'¿Cerrar sesión?', exact:true }).getByRole('button', { name:'Sí, cerrar sesión', exact:true }).click();
   await page.getByRole('heading', { name: 'Iniciar sesión', exact: true }).waitFor();
   await second.getByRole('heading', { name: 'Iniciar sesión', exact: true }).waitFor();
   const completedCatalog = page.waitForResponse(response => response.url().endsWith('/api/v1/eventos') && response.status() === 200);

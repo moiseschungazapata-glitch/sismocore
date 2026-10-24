@@ -38,6 +38,7 @@ async function setup(role) {
     const request = route.request(), url = new URL(request.url()), path = url.pathname;
     requests.push({ role, method:request.method(), path, query:url.search });
     if (path === '/api/v1/auth/me') return route.fulfill({ json:{ user } });
+    if (path === '/api/v1/auth/logout') return route.fulfill({ status:204 });
     if (path === '/api/v1/eventos') return route.fulfill({ json:{ eventos:[], total:0, codigo_fuente:'igp', fuente:'IGP', periodo_dias:30, frecuencia_segundos:600, consultado_en:now, ultima_sincronizacion:now, ultima_ejecucion:null } });
     if (path === '/api/v1/usuarios' && request.method() === 'GET') return route.fulfill({ json:{ usuarios:accounts, total:accounts.length, pagina:1, tamano:20 } });
     if (path === '/api/v1/usuarios' && request.method() === 'POST') {
@@ -96,16 +97,35 @@ try {
   for (let i = 0; i < 12; i++) { await page.keyboard.press('Tab'); assert.ok(await dialog.evaluate(el => el.contains(document.activeElement))); }
   await axe(page,'Crear cuenta escritorio');
   await dialog.getByRole('button', { name:'Crear cuenta', exact:true }).click();
+  let confirmation = page.getByRole('dialog', { name:'¿Crear esta cuenta?', exact:true });
+  await confirmation.waitFor();
+  assert.equal(requests.filter(r => r.method === 'POST' && r.path === '/api/v1/usuarios').length,0);
+  await axe(page,'Confirmar creación');
+  await confirmation.getByRole('button', { name:'Cancelar', exact:true }).click();
+  dialog = page.getByRole('dialog', { name:'Crear usuario', exact:true });
+  assert.equal(await dialog.getByLabel('Nombre completo', { exact:true }).inputValue(),'Cuenta de prueba');
+  await dialog.getByRole('button', { name:'Crear cuenta', exact:true }).click();
+  await confirmation.getByRole('button', { name:'Sí, crear cuenta', exact:true }).click();
   await page.getByRole('status').filter({ hasText:'Cuenta guardada' }).waitFor();
   await page.getByRole('button', { name:'Editar nueva@example.org', exact:true }).filter({ visible:true }).waitFor();
   await page.getByRole('button', { name:'Editar analista@example.org', exact:true }).filter({ visible:true }).click();
-  dialog = page.getByRole('dialog');
+  dialog = page.getByRole('dialog', { name:'Editar cuenta', exact:true });
   await dialog.getByLabel('Estado de la cuenta').selectOption('suspendido');
   conflict();
   await dialog.getByRole('button', { name:'Guardar cambios', exact:true }).click();
+  confirmation = page.getByRole('dialog', { name:'¿Suspender esta cuenta?', exact:true });
+  await confirmation.waitFor();
+  assert.equal(requests.filter(r => r.method === 'PATCH').length,0);
+  await page.setViewportSize({ width:390,height:960 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false);
+  await axe(page,'Confirmar suspensión móvil');
+  await page.screenshot({ path:'.runtime/phase2/confirmacion-suspension.png',fullPage:true });
+  await page.setViewportSize({ width:1440,height:960 });
+  await confirmation.getByRole('button', { name:'Confirmar cambios', exact:true }).click();
   await dialog.getByRole('alert').filter({ hasText:'La cuenta cambió' }).waitFor();
   await axe(page,'Conflicto de edición');
   await dialog.getByRole('button', { name:'Guardar cambios', exact:true }).click();
+  await confirmation.getByRole('button', { name:'Confirmar cambios', exact:true }).click();
   await dialog.waitFor({ state:'hidden' });
   await page.getByText('Suspendido', { exact:true }).filter({ visible:true }).waitFor();
   for (const width of [320,390,768,1440]) {
@@ -129,6 +149,17 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false,`Auditoría overflow ${width}`);
     if ([390,1440].includes(width)) { await page.screenshot({ path:`.runtime/phase2/auditoria-${width}.png`,fullPage:true }); await axe(page,`Auditoría ${width}`); }
   }
+  await page.getByRole('button', { name:'Cerrar sesión', exact:true }).filter({ visible:true }).click();
+  confirmation = page.getByRole('dialog', { name:'¿Cerrar sesión?', exact:true });
+  await confirmation.waitFor();
+  assert.equal(requests.filter(r => r.path === '/api/v1/auth/logout').length,0);
+  await page.keyboard.press('Escape');
+  await confirmation.waitFor({ state:'hidden' });
+  assert.equal(requests.filter(r => r.path === '/api/v1/auth/logout').length,0);
+  await page.getByRole('button', { name:'Cerrar sesión', exact:true }).filter({ visible:true }).click();
+  await confirmation.getByRole('button', { name:'Sí, cerrar sesión', exact:true }).click();
+  await page.getByRole('heading', { name:'Iniciar sesión', exact:true }).waitFor();
+  assert.equal(requests.filter(r => r.path === '/api/v1/auth/logout').length,1);
   await context.close();
   assert.deepEqual(errors,[]);
   assert.deepEqual(violations,[]);

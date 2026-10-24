@@ -39,3 +39,18 @@ export function Dialog({ open, title, description, onClose, children, eyebrow = 
   }, [open])
   return <dialog className="detail-dialog" ref={dialog} aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} onClose={onClose} onCancel={event => { if (busy) event.preventDefault() }} onKeyDown={containDialogFocus} onClick={e => { if (!busy && e.target === e.currentTarget) dialog.current?.close() }}><div className="dialog-shell"><div className="dialog-header"><div><p className="eyebrow">{eyebrow}</p><h2 id={titleId}>{title}</h2>{description && <p id={descriptionId}>{description}</p>}</div><Button variant="ghost" icon="close" aria-label="Cerrar detalle" disabled={busy} onClick={() => dialog.current?.close()} /></div>{children}</div></dialog>
 }
+
+export function ConfirmDialog({ open, title, description, confirmLabel, busy = false, danger = false, onCancel, onConfirm, children }: {
+  open: boolean; title: string; description: string; confirmLabel: string; busy?: boolean; danger?: boolean
+  onCancel: () => void; onConfirm: () => void; children?: ReactNode
+}) {
+  const cancel = useRef<HTMLButtonElement>(null)
+  useEffect(() => { if (open) cancel.current?.focus() }, [open])
+  return <Dialog open={open} title={title} description={description} eyebrow="CONFIRMACIÓN" busy={busy} onClose={onCancel}>
+    <div className={`confirmation-content${danger ? ' confirmation-content--danger' : ''}`}>
+      <span className="confirmation-icon"><Icon name={danger ? 'alert' : 'info'} size={26} /></span>
+      {children}
+      <div className="confirmation-actions"><button ref={cancel} type="button" className="button button--secondary" disabled={busy} onClick={onCancel}>Cancelar</button><Button variant="primary" className={danger ? 'confirmation-danger' : ''} loading={busy} onClick={onConfirm}>{busy ? 'Procesando…' : confirmLabel}</Button></div>
+    </div>
+  </Dialog>
+}
