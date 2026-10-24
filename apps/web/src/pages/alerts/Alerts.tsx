@@ -5,12 +5,13 @@ import { currentPushDevice, deactivatePush, enablePush, notificationStatus, push
 import './alerts.css'
 import { Rules, AlertHistory } from './Rules'
 import VoiceTrial from './VoiceTrial'
+import SmsTrial from './SmsTrial'
 import AutomaticPush from './AutomaticPush'
 import { Icon } from '../../components/Icon'
 
 export default function Alerts({ userId,manageRules=false,manageCalls=false }: { userId:string;manageRules?:boolean;manageCalls?:boolean }) {
   const [section,setSection]=useState<'reglas'|'canales'|'historial'>(manageRules?'reglas':'canales')
-  const [channel,setChannel]=useState<'push'|'voz'>('push')
+  const [channel,setChannel]=useState<'push'|'voz'|'sms'>('push')
   const activeSection=section==='reglas'&&!manageRules?'canales':section
   const [status,setStatus] = useState<PushStatus | null>(null)
   const [error,setError] = useState('')
@@ -67,10 +68,11 @@ export default function Alerts({ userId,manageRules=false,manageCalls=false }: {
     {activeSection==='historial'&&<AlertHistory manage={manageRules}/>}
     {activeSection==='canales'&&<div className="alerts-channel-layout">
       {manageCalls&&<nav className="alerts-channel-nav" aria-label="Canal de entrega">
-        <button type="button" aria-pressed={channel==='push'} onClick={()=>setChannel('push')}><Icon name="alert" size={18}/><span>Notificaciones<small>Navegadores y dispositivos</small></span></button>
-        <button type="button" aria-pressed={channel==='voz'} onClick={()=>setChannel('voz')}><Icon name="wave" size={18}/><span>Llamadas<small>Teléfono autorizado</small></span></button>
+        <button type="button" aria-label="Notificaciones Navegadores y dispositivos" aria-pressed={channel==='push'} onClick={()=>setChannel('push')}><Icon name="alert" size={18}/><span>Notificaciones<small>Navegadores y dispositivos</small></span></button>
+        <button type="button" aria-label="Llamadas Teléfono autorizado" aria-pressed={channel==='voz'} onClick={()=>setChannel('voz')}><Icon name="wave" size={18}/><span>Llamadas<small>Teléfono autorizado</small></span></button>
+        <button type="button" aria-label="SMS Mensajes de prueba" aria-pressed={channel==='sms'} onClick={()=>setChannel('sms')}><Icon name="mail" size={18}/><span>SMS<small>Mensajes de prueba</small></span></button>
       </nav>}
-      {channel==='voz'&&manageCalls?<VoiceTrial/>:<>
+      {channel==='voz'&&manageCalls?<VoiceTrial/>:channel==='sms'&&manageCalls?<SmsTrial/>:<>
         <AutomaticPush status={status} onChanged={()=>setRevision(value=>value+1)}/>
         <Panel title="Tus dispositivos" description="Administra dónde recibes las notificaciones." action={<Button icon="refresh" disabled={busy} onClick={()=>{setError('');setRevision(value=>value+1)}}>Actualizar lista</Button>}>
           <div className="alerts-browser">
