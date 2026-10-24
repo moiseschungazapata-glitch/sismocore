@@ -94,7 +94,8 @@ export async function crearReporte(eventos: EventoSismico[], context: ReportCont
     ['Última sincronización', context.lastSync ? horaPeru(new Date(context.lastSync)) : 'Sin sincronizaciones registradas'],
     ['Búsqueda', context.filters.q || 'Sin búsqueda'],
     ['Magnitud seleccionada', magnitudeLabels[context.filters.magnitude] || 'Todas'],
-    ['Desde (UTC)', context.filters.since || 'Todo el periodo disponible'],
+    ['Desde (UTC)', context.filters.since || 'Inicio del periodo disponible'],
+    ['Hasta (UTC)', context.filters.until || 'Fin del periodo disponible'],
     ['Eventos', eventos.length],
     ['Magnitud máxima', magnitudes.length ? Math.max(...magnitudes) : 'Sin dato'],
     ['Profundidad promedio (km)', eventos.length ? eventos.reduce((total, e) => total + e.profundidad, 0) / eventos.length : 'Sin dato'],
@@ -113,8 +114,8 @@ export async function crearReporte(eventos: EventoSismico[], context: ReportCont
     row.getCell(1).font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF243B53' } }
     if (index % 2 === 0) row.eachCell(cell => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F7FA' } } })
   })
-  for (const address of ['B12', 'B13']) summary.getCell(address).numFmt = '0.0'
-  summary.pageSetup = { orientation: 'portrait', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 1, printArea: 'A1:B16' }
+  for (const address of ['B13', 'B14']) summary.getCell(address).numFmt = '0.0'
+  summary.pageSetup = { orientation: 'portrait', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 1, printArea: 'A1:B17' }
   return workbook
 }
 

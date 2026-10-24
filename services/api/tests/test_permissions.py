@@ -136,9 +136,24 @@ class PermissionTests(unittest.IsolatedAsyncioTestCase):
                 self.assertNotIn('Camaná',str(self.records[-1]))
 
     async def test_invalid_export_filters_and_audit_dates_are_rejected(self):
-        for body in ({'magnitud':'invalid'},{'desde':'not-date'},{'q':'x'*201}):
+        for body in ({'magnitud':'invalid'},{'desde':'not-date'},{'hasta':'2026-02-30'},{'desde':'2026-10-24','hasta':'2026-10-20'},{'q':'x'*201}):
             self.assertEqual((await self.client.post('/api/v1/reportes/exportar',headers=ORIGIN,json=body)).status_code,422)
         self.assertEqual((await self.client.get('/api/v1/auditoria?desde=2026-10-24&hasta=2026-10-20')).status_code,422)
+
+    async def test_export_range_includes_the_entire_last_day_and_audits_both_dates(self):
+        events = [{**EVENT,'id':str(i),'ocurrido_en':stamp} for i,stamp in enumerate([
+            '2026-10-21T23:59:59+00:00','2026-10-22T00:00:00+00:00',
+            '2026-10-23T23:59:59.999999+00:00','2026-10-24T00:00:00+00:00'])]
+        with patch('app.services.catalog.catalog.read',new=AsyncMock(return_value={**CATALOG,'eventos':events})):
+            response = await self.client.post('/api/v1/reportes/exportar',headers=ORIGIN,
+                json={'desde':'2026-10-22','hasta':'2026-10-23'})
+            self.assertEqual(response.status_code,200)
+            self.assertEqual([event['id'] for event in response.json()['eventos']],['1','2'])
+            details = self.records[-1]['p_detalles']
+            self.assertEqual(details['desde'],'2026-10-22')
+            self.assertEqual(details['hasta'],'2026-10-23')
+            response = await self.client.post('/api/v1/reportes/exportar',headers=ORIGIN,json={'hasta':'2026-10-22'})
+            self.assertEqual([event['id'] for event in response.json()['eventos']],['0','1'])
 
     async def test_reader_catalog_does_not_disclose_connector_execution_details(self):
         self.actor['rol'] = 'lectura'

@@ -4,7 +4,7 @@ import './App.css'
 import { useCatalog } from './hooks/useCatalog'
 import { navigate, pages, useLocation } from './lib/navigation'
 import { Link } from './components/Link'
-import { readFilters, filterSearch, type Filters as FilterValues } from './lib/filters'
+import { readFilters, filterSearch, invalidDateRange, type Filters as FilterValues } from './lib/filters'
 import { fecha, number } from './lib/format'
 import { containDialogFocus } from './lib/accessibility'
 import { descargarReporte } from './lib/export'
@@ -36,14 +36,15 @@ function Monitoring({ user, onLogout }: { user: AuthUser; onLogout: () => Promis
   const drawer = useRef<HTMLDialogElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const previousPath = useRef(path)
-  const emptyFilters = { q: '', magnitude: 'todos', since: '' }
+  const emptyFilters = { q: '', magnitude: 'todos', since: '', until: '' }
   const updateFilters = (values: FilterValues) => navigate(path + filterSearch(values), true)
   const clearFilters = () => updateFilters(emptyFilters)
   const route = (target: string) => target + filterSearch(filters)
   const events = (datos?.eventos ?? []).filter(event => {
     const text = `${event.lugar} ${event.id_externo} ${event.id}`.toLocaleLowerCase('es')
-    return text.includes(filters.q.trim().toLocaleLowerCase('es')) &&
+    return !invalidDateRange(filters) && text.includes(filters.q.trim().toLocaleLowerCase('es')) &&
       (!filters.since || event.ocurrido_en.slice(0, 10) >= filters.since) &&
+      (!filters.until || event.ocurrido_en.slice(0, 10) <= filters.until) &&
       (filters.magnitude === 'todos' || (event.magnitud !== null && (filters.magnitude === 'menor' ? event.magnitud < 4 : filters.magnitude === 'medio' ? event.magnitud >= 4 && event.magnitud < 6 : event.magnitud >= 6)))
   })
   const magnitudes = events.flatMap(event => event.magnitud === null ? [] : [event.magnitud])
@@ -77,7 +78,7 @@ function Monitoring({ user, onLogout }: { user: AuthUser; onLogout: () => Promis
   </>
 
   async function downloadReport() {
-    if (exporting) return
+    if (exporting || invalidDateRange(filters)) return
     setExporting(true)
     setExported(false)
     setExportError('')

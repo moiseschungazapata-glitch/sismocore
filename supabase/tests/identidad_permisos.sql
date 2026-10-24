@@ -50,6 +50,8 @@ begin
       'denegado','{"password":"NO_GUARDAR"}',correlacion);
     raise exception 'Se acepto una credencial en auditoria';
   exception when sqlstate 'PT422' then null; end;
+  perform public.sismocore_registrar_auditoria(null,'reporte.exportar','reportes',null,
+    'correcto','{"desde":"2026-10-22","hasta":"2026-10-23"}',correlacion);
   if has_function_privilege('anon','public.sismocore_actualizar_perfil(uuid,uuid,text,text,text,timestamptz,uuid)','EXECUTE')
     or has_function_privilege('authenticated','public.sismocore_actualizar_perfil(uuid,uuid,text,text,text,timestamptz,uuid)','EXECUTE')
     or has_function_privilege('authenticated','public.sismocore_registrar_auditoria(uuid,text,text,uuid,text,jsonb,uuid)','EXECUTE') then

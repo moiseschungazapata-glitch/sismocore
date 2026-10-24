@@ -109,7 +109,7 @@ input::placeholder { color: var(--subtle); opacity: 1; }
 .filter-count { font-size: 11px; color: var(--subtle); }
 .filters-panel[open] .filter-count > .icon { transform: rotate(90deg); }
 .filter-body { padding: 17px; }
-.shared-filters { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(155px, .56fr) minmax(154px, .55fr) auto; gap: 14px; align-items: end; }
+.shared-filters { display: grid; grid-template-columns: minmax(170px, 1fr) minmax(145px, .7fr) minmax(145px, .7fr) minmax(145px, .7fr) auto; gap: 14px; align-items: end; }
 .field { display: flex; flex-direction: column; gap: 7px; color: var(--muted); font-size: 11px; font-weight: 500; min-width: 0; }
 .field input, .field select { width: 100%; min-width: 0; min-height: 42px; padding: 10px 12px; border: 1px solid #3a4b62; border-radius: 7px; background: var(--surface-input); color: var(--text); font-size: 12px; }
 .field input:hover, .field select:hover { border-color: #56718c; }

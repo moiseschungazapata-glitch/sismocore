@@ -32,5 +32,5 @@ export function listAudit(filters: Record<string, string>, signal: AbortSignal) 
   return protectedRequest<{ registros: AuditEntry[]; total: number; pagina: number; tamano: number; fecha_corte: string }>(`auditoria?${params}`, undefined, undefined, signal)
 }
 export const authorizeExport = (filters: Filters) => protectedRequest<ExportSnapshot>('reportes/exportar', {
-  q: filters.q, magnitud: filters.magnitude, desde: filters.since || null,
+  q: filters.q, magnitud: filters.magnitude, desde: filters.since || null, hasta: filters.until || null,
 })
