@@ -57,7 +57,7 @@ try{
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
   await page.screenshot({path:`.runtime/alert-rules-${mobile?'android':'desktop'}.png`,fullPage:true})
   const previousReads=ruleReads;role='lectura'
-  await page.reload();await page.getByRole('heading',{name:'Tus avisos automáticos'}).waitFor()
+  await page.reload();await page.getByRole('button',{name:'Historial',exact:true}).click();await page.getByRole('heading',{name:'Tus avisos automáticos'}).waitFor()
   assert.equal(await page.getByRole('button',{name:'Nueva regla',exact:true}).count(),0)
   assert.equal(ruleReads,previousReads)
   assert.deepEqual(errors,[])

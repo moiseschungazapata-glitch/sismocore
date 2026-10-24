@@ -38,24 +38,26 @@ export default function VoiceTrial(){
   const limit=data?.limites
   const exhausted=!!limit&&(limit.usadas_hoy>=limit.limite_diario||limit.usadas_total>=limit.limite_total)
   return <>
-    <Panel title="Llamadas de prueba" description="Pruebas manuales de voz para el administrador, usando la cuenta Trial de Twilio." action={<Badge tone="info">Solo pruebas manuales</Badge>}>
+    <AutomaticVoice targets={data?.destinatarios||[]} revision={revision}/>
+    <details className="alerts-tools"><summary>Probar una llamada<span>Comprobar recepción y ver pruebas recientes</span></summary>
+    <Panel title="Llamadas de prueba" description="Comprueba la recepción antes de autorizar tu teléfono.">
       {error&&<p className="inline-error" role="alert">{error}</p>}
       {!data&&!error&&<p role="status">Comprobando Twilio…</p>}
       {data&&!data.configurada&&<p>Falta completar la configuración privada de Twilio en este servidor.</p>}
       {data?.configurada&&<>
-        <p>El teléfono recibirá el mensaje: «Esta es una prueba de SISMOCORE. No representa una alerta sísmica real».</p>
+
         <label className="field"><span>Destinatario de la llamada de prueba</span><select value={selected?target:''} onChange={event=>setTarget(event.target.value)} disabled={busy}><option value="">Selecciona tu teléfono</option>{data.destinatarios.map(value=><option key={value.id} value={value.id}>{value.etiqueta}</option>)}</select></label>
         {!data.destinatarios.length&&<p className="information-note">No se encontró un destino disponible. Realiza primero una llamada completada desde la consola de Twilio al número verificado, usando el remitente configurado, y actualiza esta sección.</p>}
-        {limit&&<p className="push-caption">Límite de SISMOCORE: {limit.usadas_hoy}/{limit.limite_diario} intentos hoy · {limit.usadas_total}/{limit.limite_total} en total. Se cuenta cada solicitud, incluso si falla. Estos contadores no representan los minutos restantes de Twilio.</p>}
+        {limit&&<p className="push-caption">Intentos compartidos: {limit.usadas_hoy}/{limit.limite_diario} hoy · {limit.usadas_total}/{limit.limite_total} en total.</p>}
         {exhausted&&<p className="inline-error">Se alcanzó el límite de pruebas de SISMOCORE.</p>}
         {!!limit&&limit.espera_segundos>0&&<p className="push-caption">Espera aproximadamente {limit.espera_segundos} segundos y actualiza antes de otra prueba.</p>}
       </>}
       <div className="push-actions"><Button variant="primary" loading={busy} disabled={!selected||!data?.configurada||exhausted||!!limit?.espera_segundos} onClick={()=>setConfirm(true)}>Realizar llamada de prueba</Button><Button icon="refresh" disabled={busy} onClick={()=>{setError('');setRevision(value=>value+1)}}>Actualizar llamadas</Button></div>
       {message&&<p className="export-success" role="status">{message}</p>}
-      {!!data?.historial.length&&<ul className="push-devices">{data.historial.map(row=><li key={row.id}><div className="push-device-details"><h3>Teléfono terminado en {row.ultimos}</h3><Badge tone={['failed','rechazada','desconocida'].includes(row.estado)?'warning':'neutral'}>{states[row.estado]||row.estado}</Badge><p>{fecha(row.fecha)} · Perú</p>{row.estado==='desconocida'&&<p>El resultado es incierto. Consulta los registros de Twilio antes de repetir la llamada.</p>}</div>{['queued','initiated','ringing','in-progress'].includes(row.estado)&&<Button disabled={busy} onClick={()=>void refresh(row.id)}>Consultar estado</Button>}</li>)}</ul>}
-      <p className="push-caption">Cada llamada puede consumir minutos de la prueba. El mensaje es breve y finaliza con una instrucción de colgar; hay un minuto de espera entre intentos. Estas pruebas son manuales y comparten el límite con las llamadas automáticas. «Finalizada» no confirma quién contestó.</p>
+      {!!data?.historial.length&&<details className="alerts-help alerts-trial-history" open={data.historial.some(row=>['queued','initiated','ringing','in-progress'].includes(row.estado))}><summary>Pruebas recientes ({data.historial.length})</summary><ul className="push-devices">{data.historial.map(row=><li key={row.id}><div className="push-device-details"><h3>Teléfono terminado en {row.ultimos}</h3><Badge tone={['failed','rechazada','desconocida'].includes(row.estado)?'warning':'neutral'}>{states[row.estado]||row.estado}</Badge><p>{fecha(row.fecha)} · Perú</p>{row.estado==='desconocida'&&<p>El resultado es incierto. Consulta los registros de Twilio antes de repetir la llamada.</p>}</div>{['queued','initiated','ringing','in-progress'].includes(row.estado)&&<Button disabled={busy} onClick={()=>void refresh(row.id)}>Consultar estado</Button>}</li>)}</ul></details>}
+      <p className="push-caption">Consume minutos Trial. Un intento por minuto, sin reintentos automáticos. «Finalizada» no confirma quién contestó.</p>
     </Panel>
-    <AutomaticVoice targets={data?.destinatarios||[]} revision={revision}/>
+    </details>
     <ConfirmDialog open={confirm} title="¿Realizar una llamada de prueba?" description={`Se llamará a ${selected?.etiqueta||'tu teléfono seleccionado'} con el mensaje de prueba de SISMOCORE. Consumirá parte de tu cuota Trial de Twilio. No representa una alerta real.`} confirmLabel="Sí, realizar llamada" busy={busy} onCancel={()=>{if(!busy)setConfirm(false)}} onConfirm={()=>void call()}/>
   </>
 }
