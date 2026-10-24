@@ -46,7 +46,7 @@ try {
   const report = new ExcelJS.Workbook();
   await report.xlsx.readFile(file);
   const sheet = report.getWorksheet('Eventos sísmicos');
-  if (sheet.getCell('I10').value !== data.eventos[0].id_externo || sheet.getCell('J9').value !== 'Fecha y hora · UTC') throw new Error('Reporte incompleto.');
+  if (sheet.getCell('G2').value !== data.eventos[0].id_externo || report.getWorksheet('Detalle técnico').getCell('B1').value !== 'Fecha y hora (UTC)') throw new Error('Reporte incompleto.');
   await page.getByRole('link', { name: 'Dashboard', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(400);

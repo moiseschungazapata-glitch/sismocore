@@ -33,8 +33,12 @@ try {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile('.runtime/reporte-prueba.xlsx');
   const sheet = workbook.getWorksheet('Eventos sísmicos');
-  assert.equal(sheet.getCell('B10').value, event.lugar);
-  assert.equal(sheet.getCell('C10').value, 4.2);
+  assert.equal(sheet.getCell('B2').value, event.lugar);
+  assert.equal(sheet.getCell('C2').value, 4.2);
+  assert.equal(sheet.views[0].ySplit,1);
+  assert.ok(!sheet.views[0].xSplit);
+  assert.equal(workbook.worksheets.length,3);
+  assert.equal(sheet.getCell('H2').hyperlink,event.url_fuente);
   await page.getByRole('status').filter({ hasText: 'Reporte preparado' }).waitFor();
   await page.screenshot({ path: '.runtime/reporte-pantalla.png', fullPage: true });
   assert.deepEqual(errors, []);
