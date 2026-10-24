@@ -21,6 +21,7 @@ class Settings:
     AUTH_COOKIE_SECURE = os.getenv('AUTH_COOKIE_SECURE', 'true').lower() == 'true'
     FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID', 'sismocore-5af68')
     FIREBASE_SERVICE_ACCOUNT_JSON = os.getenv('FIREBASE_SERVICE_ACCOUNT_JSON', '')
+    PUBLIC_APP_URL = os.getenv('PUBLIC_APP_URL','https://sismocore.vercel.app').rstrip('/')
 
     @property
     def database_configured(self):

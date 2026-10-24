@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'services' / 'api')
 from app.core.config import settings
 from app.services.database import database
 from app.services.ingestion import Ingestion
+from app.services.alerts import process_alerts
 from app.services.igp import IGP_URL, normalize, query_params
 from datetime import datetime, timezone
 import httpx
@@ -44,6 +45,7 @@ async def main(check_only):
         print('Resultado de sincronización IGP:', worker.state)
         if worker.state not in ('actualizada', 'otra_ejecucion'):
             raise RuntimeError('La sincronización no terminó correctamente. Consulta Fuentes de datos.')
+        print('Resultado de avisos:',await process_alerts())
     finally:
         await database.close()
 

@@ -34,6 +34,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         async def database(method,table,**kw):
             self.calls.append((method,table,kw))
             if self.failure: raise self.failure
+            if table=='reglas_alerta': return []
             if table=='dispositivos_notificacion': return [{'id':DEVICE,'token':TOKEN,'token_hash':'NEVER'}]
             if table.endswith('sismocore_preparar_prueba_push'): return {'token':TOKEN,'prueba_id':DEVICE}
             if table.endswith('sismocore_registrar_dispositivo'): return {'id':DEVICE,'token':TOKEN}
@@ -58,7 +59,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response.status_code,200)
             self.assertNotIn(TOKEN,response.text)
             self.assertNotIn('NEVER',response.text)
-            self.assertEqual(self.calls[-1][2]['params']['usuario_id'],'eq.'+USER)
+            self.assertEqual(next(call[2]['params']['usuario_id'] for call in self.calls if call[1]=='dispositivos_notificacion'),'eq.'+USER)
             self.assertFalse(response.json()['automaticas_activas'])
 
     async def test_anonymous_cannot_read_devices(self):

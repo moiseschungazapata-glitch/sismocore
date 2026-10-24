@@ -15,7 +15,8 @@ try {
     await page.route('**/api/v1/**',async route => {
       const path=new URL(route.request().url()).pathname
       let body={}
-      if (path.endsWith('/auth/me')) body={user}
+      if (path.endsWith('/alertas/historial')) body={entregas:[]}
+      else if (path.endsWith('/auth/me')) body={user}
       else if(path.endsWith('/notificaciones')) body={configurada:configured,automaticas_activas:false,dispositivos:active ? [{id,etiqueta:'Chrome en Android',activo:true,registrado_en:'2026-10-24T01:00:00Z',ultima_prueba_en:null}] : []}
       else if(path.endsWith('/prueba')) { sends++; body={estado:'aceptada',message:'Firebase aceptó la notificación de prueba. Comprueba su recepción en este dispositivo.'} }
       else if(path.endsWith('/desactivar')) { deactivations++; active=false; body={message:'Desactivado'} }

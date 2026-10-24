@@ -4,9 +4,9 @@ from app.services.auth import require_user
 from app.services import audit
 
 ROLE_PERMISSIONS = {
-    'administrador': ['notificaciones.propias','catalogo.leer','fuentes.leer','reportes.exportar','usuarios.administrar','auditoria.leer','modelos.leer','alertas.leer'],
+    'administrador': ['alertas.administrar','notificaciones.propias','catalogo.leer','fuentes.leer','reportes.exportar','usuarios.administrar','auditoria.leer','modelos.leer','alertas.leer'],
     'analista': ['notificaciones.propias','catalogo.leer','fuentes.leer','reportes.exportar','modelos.leer'],
-    'operador': ['notificaciones.propias','catalogo.leer','alertas.leer'],
+    'operador': ['alertas.administrar','notificaciones.propias','catalogo.leer','alertas.leer'],
     'auditor': ['notificaciones.propias','catalogo.leer','fuentes.leer','reportes.exportar','auditoria.leer','modelos.leer','alertas.leer'],
     'lectura': ['notificaciones.propias','catalogo.leer'],
 }

@@ -7,6 +7,7 @@ import './administration.css'
 const actions: Record<string, string> = {
   'notificacion.activar':'Activación de notificaciones', 'notificacion.desactivar':'Desactivación de notificaciones',
   'notificacion.prueba_solicitada':'Prueba solicitada', 'notificacion.prueba_resultado':'Resultado de prueba',
+  'notificacion.automatica':'Resultado de aviso automático',
   'sesion.iniciar':'Inicio de sesión', 'sesion.rechazada':'Acceso rechazado', 'sesion.cerrar':'Cierre de sesión',
   'contrasena.actualizar':'Cambio de contraseña', 'acceso.denegado':'Operación denegada',
   'usuario.crear':'Creación de cuenta', 'usuario.consultar':'Consulta de cuentas',

@@ -18,6 +18,7 @@ from app.api.routes.admin import router as admin_router
 from app.api.routes.reports import router as reports_router
 from app.api.routes.sources import router as sources_router
 from app.api.routes.notifications import router as notifications_router
+from app.api.routes.alerts import router as alerts_router
 
 
 @asynccontextmanager
@@ -74,6 +75,7 @@ app.include_router(admin_router, prefix=settings.API_PREFIX)
 app.include_router(reports_router, prefix=settings.API_PREFIX)
 app.include_router(sources_router, prefix=settings.API_PREFIX)
 app.include_router(notifications_router, prefix=settings.API_PREFIX)
+app.include_router(alerts_router, prefix=settings.API_PREFIX)
 
 
 @app.get('/')

@@ -167,6 +167,12 @@ class Ingestion:
     async def run(self):
         while True:
             await self.sync()
+            if self.state in ('actualizada','otra_ejecucion'):
+                from app.services.alerts import process_alerts
+                try:
+                    await process_alerts()
+                except Exception as exc:
+                    logger.warning('Avisos no procesados (%s).',type(exc).__name__)
             await asyncio.sleep(settings.SYNC_INTERVAL_SECONDS)
 
 

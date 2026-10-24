@@ -57,6 +57,10 @@ class PushSender:
             return self._oauth_token
 
     async def test(self, token, correlation_id, origin):
+        return await self.send(token,correlation_id,origin,'SISMOCORE · Prueba de notificación',
+            'La conexión de notificaciones está funcionando. Este mensaje es una prueba; no es una alerta sísmica.','prueba')
+
+    async def send(self, token, correlation_id, origin, title, body, kind='evento_observado'):
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(10,connect=5)) as client:
                 oauth = await self.access_token(client)
@@ -64,11 +68,10 @@ class PushSender:
                     f'https://fcm.googleapis.com/v1/projects/{settings.FIREBASE_PROJECT_ID}/messages:send',
                     headers={'Authorization':f'Bearer {oauth}'}, json={'message':{
                         'token':token,
-                        'notification':{'title':'SISMOCORE · Prueba de notificación',
-                            'body':'La conexión de notificaciones está funcionando. Este mensaje es una prueba; no es una alerta sísmica.'},
-                        'data':{'tipo':'prueba','referencia':correlation_id,'ruta':'/alertas'},
-                        'webpush':{'headers':{'TTL':'60'}, 'notification':{
-                            'tag':f'sismocore-prueba-{correlation_id}','icon':f'{origin}/favicon.svg'},
+                        'notification':{'title':title,'body':body},
+                        'data':{'tipo':kind,'referencia':correlation_id,'ruta':'/alertas'},
+                        'webpush':{'headers':{'TTL':'60' if kind=='prueba' else '300'}, 'notification':{
+                            'tag':f'sismocore-{kind}-{correlation_id}','icon':f'{origin}/favicon.svg'},
                             'fcm_options':{'link':f'{origin}/alertas'}},
                     }})
                 payload = result.json()

@@ -26,12 +26,16 @@ try {
   await db.exec(await readFile(new URL('../migrations/20261023000100_identidad_permisos_auditoria.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../migrations/20261023000200_rango_fechas_reportes.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('../migrations/20261023000300_dispositivos_push.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../migrations/20261024000100_alertas_automaticas.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../migrations/20261024000200_pausa_reglas_destinatarios.sql',import.meta.url),'utf8'));
   console.log('Migracion ejecutada en PostgreSQL embebido con Auth/Storage simulados.');
   const results = await db.exec(await readFile(new URL('./esquema_sismocore.sql',import.meta.url),'utf8'));
   for (const result of results) for (const row of result.rows ?? []) if (row.resultado) console.log(row.resultado);
   const identity = await db.exec(await readFile(new URL('./identidad_permisos.sql',import.meta.url),'utf8'));
   for (const result of identity) for (const row of result.rows ?? []) if (row.resultado) console.log(row.resultado);
   await db.exec(await readFile(new URL('./notificaciones.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('./alertas_automaticas.sql',import.meta.url),'utf8'));
+  console.log('Reglas, zonas, reservas, revocacion y deduplicacion de avisos comprobados.');
   const tables = await db.query("select count(*)::int as total from pg_tables where schemaname='public'");
   if (tables.rows[0].total !== 13) throw new Error('Cantidad de tablas inesperada');
   const leaked = await db.query("select count(*)::int as total from auth.users");

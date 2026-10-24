@@ -3,8 +3,9 @@ import { Badge, Button, ConfirmDialog, Panel } from '../../components/ui'
 import { fecha } from '../../lib/format'
 import { currentPushDevice, deactivatePush, enablePush, notificationStatus, pushSupport, sendPushTest, type PushDevice, type PushStatus } from '../../services/notifications'
 import './alerts.css'
+import { Rules, AlertHistory } from './Rules'
 
-export default function Alerts({ userId }: { userId:string }) {
+export default function Alerts({ userId,manageRules=false }: { userId:string;manageRules?:boolean }) {
   const [status,setStatus] = useState<PushStatus | null>(null)
   const [error,setError] = useState('')
   const [message,setMessage] = useState('')
@@ -66,7 +67,9 @@ export default function Alerts({ userId }: { userId:string }) {
       </li>)}</ul>}
       <p className="push-caption">Una prueba por minuto. Que Firebase acepte el mensaje no confirma su entrega; comprueba que aparezca en tu celular. Al cerrar sesión se desactiva este navegador.</p>
     </Panel>
-    <Panel title="Avisos automáticos" description="Siguiente paso: definir las reglas de notificación."><p>Actualmente solo se envían pruebas solicitadas por ti. Los reportes del IGP describen eventos ya ocurridos; este servicio no predice sismos ni garantiza un aviso antes de sentirlos.</p></Panel>
+    {manageRules&&<Rules userId={userId}/>}
+    <AlertHistory manage={manageRules}/>
+    <p className="push-caption">Los avisos automáticos dependen de las reglas configuradas por administración y de la sincronización programada. Los reportes del IGP describen eventos ya ocurridos; no predicen sismos ni garantizan un aviso antes de sentirlos.</p>
     <ConfirmDialog open={!!confirmation} title={confirmation?.test ? '¿Enviar una notificación de prueba?' : '¿Desactivar este dispositivo?'} description={confirmation?.test ? 'Se enviará únicamente a este navegador y estará identificada como PRUEBA. No representa una alerta sísmica.' : 'Este navegador dejará de recibir notificaciones para tu cuenta. Puedes volver a activarlo cuando quieras.'} confirmLabel={confirmation?.test ? 'Enviar prueba' : 'Desactivar'} busy={busy} onCancel={() => { if (!busy) setConfirmation(null) }} onConfirm={() => void confirm()} />
   </div>
 }
