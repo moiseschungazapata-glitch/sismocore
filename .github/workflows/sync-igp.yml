@@ -3,7 +3,7 @@ name: Sincronizar sismos del IGP
 on:
   workflow_dispatch:
   schedule:
-    - cron: '3,13,23,33,43,53 * * * *'
+    - cron: '3-58/5 * * * *'
 
 permissions:
   contents: read
@@ -26,7 +26,7 @@ jobs:
       FIREBASE_PROJECT_ID: sismocore-5af68
       PUBLIC_APP_URL: https://sismocore.vercel.app
       CATALOG_DAYS: '30'
-      SYNC_INTERVAL_SECONDS: '600'
+      SYNC_INTERVAL_SECONDS: '300'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
