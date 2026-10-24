@@ -49,7 +49,6 @@ function Monitoring({ user, onLogout }: { user: AuthUser; onLogout: () => Promis
   const magnitudes = events.flatMap(event => event.magnitud === null ? [] : [event.magnitud])
   const max = magnitudes.length ? number(Math.max(...magnitudes)) : '—'
   const averageDepth = events.length ? `${number(events.reduce((sum, event) => sum + event.profundidad, 0) / events.length)} km` : '—'
-  const hasFilters = Boolean(filters.q || filters.since || filters.magnitude !== 'todos')
   const filterKey = JSON.stringify(filters)
   const allowed = !page || can(user, page.permission)
   const administrative = page && ['usuarios','auditoria'].includes(page.id)
@@ -126,7 +125,6 @@ function Monitoring({ user, onLogout }: { user: AuthUser; onLogout: () => Promis
                 {page.id === 'dashboard' && <>
                   <div className="metrics-grid"><Metric title="Eventos del filtro" value={String(events.length)} note="Observaciones guardadas" icon="event" accent /><Metric title="Magnitud máxima" value={max} note="Del mismo conjunto seleccionado" icon="wave" /><Metric title="Profundidad promedio" value={averageDepth} note="Kilómetros reportados por la fuente" icon="depth" /><Metric title="Base de datos" value={salud ? salud.base_datos === 'conectada' ? 'Conectada' : 'Sin conexión' : 'Sin verificar'} note="Persistencia en Supabase" icon="database" /></div>
                   <Panel title="Eventos más recientes" description="Hora de Perú, magnitud y procedencia original." action={linkAction}><EventTable {...tableProps} compact key={filterKey} /></Panel>
-                  <Panel title="Ubicación de eventos observados" description="Epicentros del mismo catálogo filtrado." action={<Link className="button button--ghost" href={route('/mapa')}>Explorar mapa<Icon name="arrow" size={16} /></Link>}>{events.length ? <MapaSismico eventos={events} /> : <EmptyState icon="map" title="No hay puntos para mostrar" description="Cambia los filtros o espera a que termine la sincronización." action={hasFilters && <Button onClick={clearFilters}>Restablecer filtros</Button>} />}</Panel>
                 </>}
                 {page.id === 'eventos' && <Panel title="Catálogo de eventos" description="Consulta cada observación y su fuente original." action={<Badge tone="info">{events.length} eventos</Badge>}><EventTable {...tableProps} key={filterKey} /></Panel>}
                 {page.id === 'mapa' && <><Panel title="Mapa de epicentros" description="Ubicación geográfica de las observaciones seleccionadas." action={<Badge tone="info">{events.length} eventos</Badge>}>{events.length ? <MapaSismico eventos={events} /> : <EmptyState icon="map" title="Sin eventos para este filtro" description="No se encontraron observaciones con las condiciones seleccionadas." action={<Button onClick={clearFilters}>Restablecer filtros</Button>} />}</Panel><Panel title="Observaciones del mapa" description="Alternativa de consulta por teclado y detalle de cada registro."><EventTable {...tableProps} key={filterKey} /></Panel></>}

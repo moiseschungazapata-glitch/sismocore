@@ -48,6 +48,8 @@ try {
   const sheet = report.getWorksheet('Eventos sísmicos');
   if (sheet.getCell('G2').value !== data.eventos[0].id_externo || report.getWorksheet('Detalle técnico').getCell('B1').value !== 'Fecha y hora (UTC)') throw new Error('Reporte incompleto.');
   await page.getByRole('link', { name: 'Dashboard', exact: true }).click();
+  if (await page.locator('.leaflet-container').count()) throw new Error('El dashboard no debe repetir el mapa.');
+  await page.getByRole('link', { name: 'Mapa sísmico', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(400);
   const markersVisible = await page.locator('.leaflet-container').evaluate(container => {
