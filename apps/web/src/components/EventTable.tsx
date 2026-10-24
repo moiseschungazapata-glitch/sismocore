@@ -1,3 +1,4 @@
+import { igpReportUrl } from '../lib/igp'
 import { useState } from 'react'
 import type { EventoSismico } from '../services/api'
 import { fecha, magnitudeStyle, number } from '../lib/format'
@@ -21,10 +22,10 @@ export function EventTable({ events, compact = false, onDetail, onClear }: { eve
       <td><Magnitude value={event.magnitud} type={event.tipo_magnitud} /></td>
       <td className="event-place">{event.lugar}<small>{number(event.latitud, 4)}, {number(event.longitud, 4)}</small></td>
       <td className="numeric">{number(event.profundidad)} <span className="muted">km</span></td>
-      <td><a className="source-link" href={event.url_fuente} target="_blank" rel="noreferrer">IGP / CENSIS<Icon name="external" size={13} /><span className="sr-only">, abre en otra pestaña</span></a><small>{event.id_externo}</small></td>
+      <td><a className="source-link" href={igpReportUrl(event)} target="_blank" rel="noreferrer">IGP / CENSIS<Icon name="external" size={13} /><span className="sr-only">, abre en otra pestaña</span></a><small>{event.id_externo}</small></td>
       <td><Button variant="ghost" icon="eye" className="icon-button" aria-label={`Ver detalle de ${event.id_externo}`} title="Ver detalle" onClick={() => onDetail(event)} /></td>
     </tr>)}</tbody></table></div>
-    <div className="event-cards">{visible.map(event => <article className="event-card" key={event.id}><div className="event-card-top"><time dateTime={event.ocurrido_en}>{fecha(event.ocurrido_en)} · Perú</time><Magnitude value={event.magnitud} type={event.tipo_magnitud} /></div><h3>{event.lugar}</h3><p className="event-card-depth"><Icon name="depth" size={15} />Profundidad: {number(event.profundidad)} km</p><div className="event-card-bottom"><a className="source-link" href={event.url_fuente} target="_blank" rel="noreferrer">Ver en IGP / CENSIS<Icon name="external" size={14} /></a><Button variant="ghost" icon="eye" onClick={() => onDetail(event)}>Ver detalle</Button></div></article>)}</div>
+    <div className="event-cards">{visible.map(event => <article className="event-card" key={event.id}><div className="event-card-top"><time dateTime={event.ocurrido_en}>{fecha(event.ocurrido_en)} · Perú</time><Magnitude value={event.magnitud} type={event.tipo_magnitud} /></div><h3>{event.lugar}</h3><p className="event-card-depth"><Icon name="depth" size={15} />Profundidad: {number(event.profundidad)} km</p><div className="event-card-bottom"><a className="source-link" href={igpReportUrl(event)} target="_blank" rel="noreferrer">Ver en IGP / CENSIS<Icon name="external" size={14} /></a><Button variant="ghost" icon="eye" onClick={() => onDetail(event)}>Ver detalle</Button></div></article>)}</div>
     {!compact && <div className="pagination"><span>{current * 20 + 1}–{Math.min((current + 1) * 20, events.length)} de {events.length} eventos</span><div><Button variant="ghost" onClick={() => setPage(current - 1)} disabled={current === 0}>Anterior</Button><span className="page-number" aria-live="polite">{current + 1} / {pages}</span><Button variant="ghost" onClick={() => setPage(current + 1)} disabled={current + 1 >= pages}>Siguiente</Button></div></div>}
   </>
 }

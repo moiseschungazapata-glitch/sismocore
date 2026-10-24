@@ -1,3 +1,4 @@
+import { igpReportUrl } from './igp.ts'
 import type { EventoSismico } from '../services/api'
 import type { Filters } from './filters'
 
@@ -28,7 +29,7 @@ export async function crearReporte(eventos: EventoSismico[], context: ReportCont
     pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
   })
   sheet.columns = [23, 48, 11, 17, 12, 12, 15, 14].map(width => ({ width }))
-  technical.columns = [17, 24, 17, 25, 39].map(width => ({ width }))
+  technical.columns = [17, 24, 17, 25, 39, 23].map(width => ({ width }))
   sheet.addTable({
     name: 'EventosSismicos', ref: 'A1', headerRow: true,
     style: { theme: 'TableStyleMedium2', showRowStripes: true },
@@ -39,9 +40,9 @@ export async function crearReporte(eventos: EventoSismico[], context: ReportCont
   technical.addTable({
     name: 'DetalleTecnico', ref: 'A1', headerRow: true,
     style: { theme: 'TableStyleMedium2', showRowStripes: true },
-    columns: ['ID IGP', 'Fecha y hora (UTC)', 'Tipo de magnitud', 'Revisión', 'ID del registro'].map(name => ({ name, filterButton: true })),
+    columns: ['ID IGP', 'Fecha y hora (UTC)', 'Tipo de magnitud', 'Revisión', 'ID del registro', 'Consulta de datos'].map(name => ({ name, filterButton: true })),
     rows: eventos.map(e => [e.id_externo, new Date(e.ocurrido_en), e.tipo_magnitud ?? 'Sin dato',
-      e.estado_revision === 'reportado_igp' ? 'Reportado por el IGP' : e.estado_revision, e.id]),
+      e.estado_revision === 'reportado_igp' ? 'Reportado por el IGP' : e.estado_revision, e.id, 'Datos originales (JSON)']),
   })
   for (const table of [sheet, technical]) {
     table.getRow(1).height = 30
@@ -51,7 +52,7 @@ export async function crearReporte(eventos: EventoSismico[], context: ReportCont
       cell.alignment = { vertical: 'middle', wrapText: true }
     })
     table.pageSetup.printTitlesRow = '1:1'
-    table.pageSetup.printArea = `A1:${table === sheet ? 'H' : 'E'}${Math.max(1, eventos.length + 1)}`
+    table.pageSetup.printArea = `A1:${table === sheet ? 'H' : 'F'}${Math.max(1, eventos.length + 1)}`
   }
   eventos.forEach((event, index) => {
     const row = sheet.getRow(index + 2)
@@ -67,14 +68,16 @@ export async function crearReporte(eventos: EventoSismico[], context: ReportCont
     detail.getCell(2).numFmt = dateFormat
     for (const column of [3, 4]) row.getCell(column).numFmt = '0.0'
     for (const column of [5, 6]) row.getCell(column).numFmt = '0.0000'
-    // Keep the complete original URL in a clickable cell, without filling the row with it.
+    row.getCell(8).value = { text: 'Ver en IGP', hyperlink: igpReportUrl(event) }
+    row.getCell(8).font = { name: 'Calibri', size: 11, underline: true, color: { argb: 'FF176B87' } }
+    // Technical provenance remains available separately and is explicitly labelled as JSON.
     try {
       const url = new URL(event.url_fuente)
       if (url.protocol === 'https:' || url.protocol === 'http:') {
-        row.getCell(8).value = { text: 'Ver en IGP', hyperlink: event.url_fuente }
-        row.getCell(8).font = { name: 'Calibri', size: 11, underline: true, color: { argb: 'FF176B87' } }
-      } else row.getCell(8).value = event.url_fuente
-    } catch { row.getCell(8).value = event.url_fuente }
+        detail.getCell(6).value = { text: 'Datos originales (JSON)', hyperlink: event.url_fuente }
+        detail.getCell(6).font = { name: 'Calibri', size: 11, underline: true, color: { argb: 'FF176B87' } }
+      } else detail.getCell(6).value = event.url_fuente
+    } catch { detail.getCell(6).value = event.url_fuente }
   })
   summary.columns = [{ width: 26 }, { width: 77 }]
   summary.getCell('A1').value = 'SISMOCORE'

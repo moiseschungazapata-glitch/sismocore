@@ -38,8 +38,19 @@ try {
   assert.equal(sheet.views[0].ySplit,1);
   assert.ok(!sheet.views[0].xSplit);
   assert.equal(workbook.worksheets.length,3);
-  assert.equal(sheet.getCell('H2').hyperlink,event.url_fuente);
+  assert.equal(sheet.getCell('H2').hyperlink,'https://ultimosismo.igp.gob.pe/evento/2026-745');
   await page.getByRole('status').filter({ hasText: 'Reporte preparado' }).waitFor();
+  await page.getByRole('link', { name:'Eventos sísmicos', exact:true }).click();
+  await page.getByRole('button', { name:`Ver detalle de ${event.id_externo}`, exact:true }).click();
+  const detail = page.getByRole('dialog');
+  assert.equal(await detail.getByRole('link', { name:/Ver evento original/ }).getAttribute('href'),sheet.getCell('H2').hyperlink);
+  await page.keyboard.press('Escape');
+  for (const href of await page.locator('.source-link').evaluateAll(links => links.map(link => link.href))) {
+    assert.equal(href,sheet.getCell('H2').hyperlink);
+  }
+  await page.getByRole('link', { name:'Mapa sísmico', exact:true }).click();
+  await page.locator('.leaflet-interactive').first().click();
+  assert.equal(await page.locator('.leaflet-popup').getByRole('link', { name:/Ver evento original/ }).getAttribute('href'),sheet.getCell('H2').hyperlink);
   await page.screenshot({ path: '.runtime/reporte-pantalla.png', fullPage: true });
   assert.deepEqual(errors, []);
   console.log('Descarga en navegador: archivo Excel válido, columnas separadas y pantalla sin CSV.');

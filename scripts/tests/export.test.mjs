@@ -29,7 +29,7 @@ test('Compact report preserves all fields across usable data, summary and techni
   assert.equal(sheet.getCell('E2').value, -17.2615);
   assert.equal(sheet.getCell('F2').value, -72.7858);
   assert.equal(sheet.getCell('G2').value, event.id_externo);
-  assert.deepEqual(sheet.getCell('H2').value, { text:'Ver en IGP', hyperlink:event.url_fuente });
+  assert.deepEqual(sheet.getCell('H2').value, { text:'Ver en IGP', hyperlink:'https://ultimosismo.igp.gob.pe/evento/2026-745' });
   assert.equal(sheet.getCell('A2').value.toISOString(), '2026-10-21T21:30:00.000Z');
   assert.equal(detail.getCell('A2').value,event.id_externo);
   assert.equal(detail.getCell('B2').value.toISOString(), '2026-10-22T02:30:00.000Z');
@@ -75,7 +75,8 @@ test('Long source links do not expand rows or require a wide URL column', async 
   const reopened = new ExcelJS.Workbook();
   await reopened.xlsx.load(await workbook.xlsx.writeBuffer());
   const sheet = reopened.getWorksheet('Eventos sísmicos');
-  assert.equal(sheet.getCell('H2').hyperlink,url);
+  assert.equal(sheet.getCell('H2').hyperlink,'https://ultimosismo.igp.gob.pe/evento/2026-745');
+  assert.equal(reopened.getWorksheet('Detalle técnico').getCell('F2').hyperlink,url);
   assert.ok(sheet.getRow(2).height <= 30);
   assert.ok(sheet.columns.reduce((sum,column) => sum + column.width,0) <= 160);
   assert.equal(sheet.columnCount,8);

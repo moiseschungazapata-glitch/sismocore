@@ -1,3 +1,4 @@
+import { igpReportUrl } from '../lib/igp'
 
 import { useEffect } from "react";
 import {
@@ -107,7 +108,7 @@ export default function MapaSismico({
               <br />
               Fecha UTC: {evento.ocurrido_en}
               <br />
-              <a href={evento.url_fuente} target="_blank" rel="noreferrer">Ver evento original en IGP / CENSIS</a>
+              <a href={igpReportUrl(evento)} target="_blank" rel="noreferrer">Ver evento original en IGP / CENSIS</a>
             </Popup>
           </CircleMarker>
         ))}
