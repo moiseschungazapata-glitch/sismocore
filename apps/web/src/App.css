@@ -180,6 +180,13 @@ input::placeholder { color: var(--subtle); opacity: 1; }
 .context-note { margin-top: 0; }
 .map-frame { height: 440px; border-radius: 10px; overflow: hidden; isolation: isolate; position: relative; border: 1px solid #38506b; }
 .map-frame .leaflet-container { height: 100%; width: 100%; font-family: inherit; }
+.map-style-switch { position: absolute; z-index: 800; bottom: 12px; left: 12px; width: 82px; height: 76px; padding: 0; overflow: hidden; isolation: isolate; cursor: pointer; border: 3px solid #fff; border-radius: 10px; background: #163541; color: #fff; box-shadow: 0 2px 9px #0006; font: 600 11px/1.3 'Segoe UI',sans-serif; }
+.map-style-switch > span:last-child { position: absolute; bottom: 0; left: 0; width: 100%; padding: 7px 3px; background: linear-gradient(transparent,#071221e8); }
+.map-style-preview { position: absolute; inset: 0; background: linear-gradient(116deg,#143853 30%,#245c4c 31%,#4c7340 50%,#7a8052 61%,#30593d 75%); }
+.map-style-switch--streets .map-style-preview { background: repeating-linear-gradient(25deg,transparent 0 19px,#f5edce 20px 22px,transparent 23px 35px),linear-gradient(116deg,#a6d6e3 30%,#cce2ac 31%); }
+.map-style-switch:hover { border-color: #63d6de; }
+.map-style-switch:focus-visible { outline: 3px solid #102a43; outline-offset: 2px; box-shadow: 0 0 0 5px #fff; }
+.map-load-error { margin-top: 12px; color: var(--danger); font-size: 12px; }
 .map-legend { padding-top: 17px; display: flex; flex-wrap: wrap; gap: 10px 17px; font-size: 11px; color: var(--muted); align-items: center; }
 .map-legend strong { font-weight: 500; color: var(--text); }
 .map-legend-item { display: inline-flex; align-items: center; gap: 6px; }
