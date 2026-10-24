@@ -8,13 +8,15 @@ try{
  for(const mobile of [false,true]){
   const context=await browser.newContext({viewport:mobile?{width:393,height:851}:{width:1365,height:900},isMobile:mobile,hasTouch:mobile})
   const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message))
-  let linked=false;let enabled=false;let writes=0;let calls=0;let completed=false;let configured=true;let role='administrador';let voiceReads=0
+  let verificationCalls=0;let verificationChecks=0;let linked=false;let enabled=false;let writes=0;let calls=0;let completed=false;let configured=true;let role='administrador';let voiceReads=0
   await page.route('**/api/v1/**',async route=>{
    const path=new URL(route.request().url()).pathname;let json={}
    if(path.endsWith('/auth/me'))json={user:{id:'11111111-1111-4111-8111-111111111111',nombre_completo:'Prueba local',email:'test@example.invalid',rol:role,estado:'activo',permisos:['catalogo.leer','notificaciones.propias',...(role==='administrador'?['voz.probar']:[])]}}
    else if(path.endsWith('/notificaciones'))json={configurada:true,dispositivos:[],automaticas_activas:false}
    else if(path.endsWith('/eventos'))json={eventos:[],total:0,codigo_fuente:'igp',periodo_dias:30,consultado_en:new Date().toISOString()}
    else if(path.endsWith('/alertas/historial'))json={entregas:[]}
+   else if(path.endsWith('/voz/verificaciones')){assert.deepEqual(route.request().postDataJSON(),{telefono:'+51900000000',confirmado:true,consentimiento:true});verificationCalls++;json={id:reference,codigo:'123456',ultimos:'0000',verificado:false}}
+   else if(path.includes('/voz/verificaciones/')){verificationChecks++;json={verificado:verificationChecks>=2,ultimos:'0000'}}
    else if(path.endsWith('/voz/automaticas')&&route.request().method()==='GET')json={configurada:configured,habilitadas:enabled,cuenta_coincide:true,telefono:{activo:linked,ultimos:linked?'1234':null,autorizado_en:null}}
    else if(path.endsWith('/voz/telefono')){assert.equal(route.request().postDataJSON().confirmado,true);linked=true;writes++;json={message:'Teléfono autorizado'}}
    else if(path.endsWith('/voz/automaticas')){assert.equal(route.request().postDataJSON().confirmado,true);enabled=route.request().postDataJSON().activa;writes++;json={message:'Configuración guardada'}}
@@ -34,7 +36,21 @@ try{
   await page.route('**/health',route=>route.fulfill({json:{base_datos:'conectada',estado:'ok'}}))
   await page.goto(base+'/alertas')
   await page.getByRole('button',{name:'Llamadas Teléfono autorizado'}).click()
-  await page.locator('.alerts-tools > summary').click()
+  await page.locator('.alerts-tools > summary').filter({hasText:'Agregar y verificar teléfono'}).click()
+  await page.getByLabel('Celular del Perú (+51)').fill('900000000')
+  await page.getByLabel('Tengo acceso al teléfono y autorización para verificarlo.').check()
+  await page.getByRole('button',{name:'Verificar número',exact:true}).click()
+  await page.getByRole('button',{name:'Cancelar',exact:true}).click();assert.equal(verificationCalls,0)
+  await page.getByRole('button',{name:'Verificar número',exact:true}).click()
+  await page.getByRole('button',{name:'Sí, verificar por llamada',exact:true}).click()
+  await page.getByText('123456',{exact:true}).waitFor()
+  await page.getByRole('button',{name:'Comprobar verificación',exact:true}).click()
+  await page.getByText('Twilio todavía no confirma la verificación.',{exact:false}).waitFor()
+  await page.getByRole('button',{name:'Comprobar verificación',exact:true}).click()
+  await page.getByRole('dialog').waitFor({state:'hidden'})
+  assert.equal(verificationCalls,1);assert.equal(calls,0);assert.equal(enabled,false)
+  await page.locator('.alerts-tools > summary').filter({hasText:'Agregar y verificar teléfono'}).click()
+  await page.locator('.alerts-tools > summary').filter({hasText:'Probar una llamada'}).click()
   const button=page.getByRole('button',{name:'Realizar llamada de prueba',exact:true})
   await page.getByLabel('Destinatario de la llamada de prueba').waitFor()
   assert.equal(await button.isDisabled(),true)

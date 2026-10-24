@@ -10,3 +10,6 @@ export const loadAutomaticVoice=()=>protectedRequest<AutomaticVoiceSettings>('vo
 export const authorizeVoicePhone=(destino_id:string)=>protectedRequest<{message:string}>('voz/telefono',{destino_id,confirmado:true})
 export const revokeVoicePhone=()=>protectedRequest<{message:string}>('voz/telefono/desactivar',{})
 export const switchAutomaticVoice=(activa:boolean)=>protectedRequest<{message:string}>('voz/automaticas',{activa,confirmado:true})
+export type VerificationResult={verificado:boolean;id?:string;codigo?:string;ultimos:string}
+export const startPhoneVerification=(telefono:string)=>protectedRequest<VerificationResult>('voz/verificaciones',{telefono,confirmado:true,consentimiento:true})
+export const checkPhoneVerification=(id:string)=>protectedRequest<{verificado:boolean;ultimos:string}>(`voz/verificaciones/${id}`)
