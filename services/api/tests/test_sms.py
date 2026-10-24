@@ -10,6 +10,7 @@ from app.services.sms import sms_provider,SmsProvider,TEMPLATE
 from app.services.voice import voice_provider,VoiceError
 from app.services.database import DatabaseError
 from app.api.routes.auth import attempts
+from app.core.config import settings
 
 ACTOR='11111111-1111-4111-8111-111111111111'
 REF='22222222-2222-4222-8222-222222222222'
@@ -97,10 +98,10 @@ class SmsApiTests(unittest.IsolatedAsyncioTestCase):
         self.mocks[3].assert_not_awaited()
 
 class SmsProviderTests(unittest.IsolatedAsyncioTestCase):
-    async def test_trial_template_only_no_from_or_custom_message(self):
+    async def test_request_matches_console_sender_and_template(self):
         with patch.object(voice_provider,'check_trial',new=AsyncMock()),patch.object(voice_provider,'request',new=AsyncMock(return_value={'sid':SID,'status':'queued'})) as request:
             await sms_provider.send_test(PHONE)
-            request.assert_awaited_once_with('POST','/Messages.json',data={'To':PHONE,'Body':TEMPLATE})
+            request.assert_awaited_once_with('POST','/Messages.json',data={'To':PHONE,'From':settings.TWILIO_FROM_NUMBER,'Body':'sms_appointment_reminders'})
     async def test_paid_account_blocked_before_send(self):
         with patch.object(voice_provider,'check_trial',new=AsyncMock(side_effect=VoiceError('CUENTA_NO_TRIAL'))),patch.object(voice_provider,'request',new=AsyncMock()) as request:
             with self.assertRaises(VoiceError):await sms_provider.send_test(PHONE)

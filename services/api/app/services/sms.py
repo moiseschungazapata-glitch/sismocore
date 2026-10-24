@@ -1,9 +1,10 @@
 """Trial SMS templates only. No custom content, automatic sends or retries."""
 import re
 from app.services.voice import voice_provider,VoiceError
+from app.core.config import settings
 
 SMS_STATES={'accepted','queued','sending','sent','delivered','undelivered','failed','canceled'}
-TEMPLATE='sms_internal_alerts'
+TEMPLATE='sms_appointment_reminders'
 
 
 class SmsProvider:
@@ -24,7 +25,9 @@ class SmsProvider:
     async def send_test(self,phone):
         await voice_provider.check_trial()
         if not re.fullmatch(r'\+519[0-9]{8}',phone):raise VoiceError('DESTINO_INVALIDO')
-        payload=await voice_provider.request('POST','/Messages.json',data={'To':phone,'Body':TEMPLATE})
+        # Match the request shown by this account's Try out SMS console.
+        payload=await voice_provider.request('POST','/Messages.json',data={
+            'To':phone,'From':settings.TWILIO_FROM_NUMBER,'Body':TEMPLATE})
         return self._result(payload)
     async def status(self,sid):
         if not re.fullmatch(r'SM[0-9a-fA-F]{32}',sid):raise VoiceError('RESPUESTA_INVALIDA')
