@@ -77,7 +77,7 @@ class IGPTests(unittest.IsolatedAsyncioTestCase):
             result = await Catalog().read()
         self.assertEqual(result['codigo_fuente'], 'igp')
         self.assertEqual(result['periodo_dias'], 30)
-        self.assertEqual(result['frecuencia_segundos'], 600)
+        self.assertEqual(result['frecuencia_segundos'], 300)
         for table, params in calls:
             if table != 'fuentes_datos':
                 self.assertEqual(params['fuente_id'], 'eq.igp-source')

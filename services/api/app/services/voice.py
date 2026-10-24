@@ -69,16 +69,6 @@ class VoiceProvider:
     async def call(self,phone):
         return await self._create_call(phone,self._origin()+'/api/v1/voz/prueba.xml')
 
-    async def verify_phone(self,phone):
-        await self.check_trial()
-        if not re.fullmatch(r'\+51[0-9]{9}',phone):raise VoiceError('21219')
-        payload=await self.request('POST','/OutgoingCallerIds.json',data={'PhoneNumber':phone})
-        if (payload.get('account_sid')!=settings.TWILIO_ACCOUNT_SID or payload.get('phone_number')!=phone
-            or not re.fullmatch(r'[0-9]{6}',str(payload.get('validation_code','')))
-            or not re.fullmatch(r'CA[0-9a-fA-F]{32}',str(payload.get('call_sid','')))):
-            raise VoiceError('RESPUESTA_INVALIDA')
-        return {'codigo':str(payload['validation_code']),'sid':payload['call_sid']}
-
     def _origin(self):
         origin=urlparse(settings.PUBLIC_APP_URL)
         if origin.scheme!='https' or not origin.netloc or origin.path or origin.query or origin.fragment or origin.username or origin.password:

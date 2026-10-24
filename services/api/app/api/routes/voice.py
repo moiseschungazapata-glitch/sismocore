@@ -50,54 +50,6 @@ class AutomaticSwitch(BaseModel):
     confirmado:Literal[True]
 
 
-class PhoneVerification(BaseModel):
-    model_config=ConfigDict(extra='forbid')
-    telefono:str=Field(pattern=r'^\+519[0-9]{8}$')
-    confirmado:Literal[True]
-    consentimiento:Literal[True]
-
-
-@router.post('/verificaciones')
-async def start_verification(body:PhoneVerification,request:Request,user=Depends(admin)):
-    guard(request,'voice')
-    try:numbers=await voice_provider.recipients()
-    except VoiceError as failure:raise provider_error(failure) from failure
-    destination=voice_provider.recipient_id(body.telefono)
-    if destination in numbers:
-        return {'verificado':True,'destino_id':destination,'ultimos':body.telefono[-4:]}
-    reference=request.state.correlation_id
-    await voice_rpc('sismocore_reservar_verificacion_voz',{'p_actor':user['id'],'p_cuenta':voice_provider.account_hash,
-        'p_destino':destination,'p_ultimos':body.telefono[-4:],'p_referencia':reference})
-    result=None;error=None
-    try:result=await voice_provider.verify_phone(body.telefono)
-    except VoiceError as failure:error=failure
-    try:
-        await voice_rpc('sismocore_registrar_estado_voz',{'p_actor':user['id'],'p_referencia':reference,
-            'p_estado':'queued' if result else 'desconocida' if error.code in ('CONEXION','RESPUESTA_INVALIDA') else 'rechazada',
-            'p_sid':result['sid'] if result else None,'p_error':error.code if error else None})
-    except DatabaseError as failure:
-        raise HTTPException(503,'Twilio procesó la solicitud, pero no se pudo guardar el resultado. Puede haber una llamada en curso. Revisa su consola antes de repetirla.') from failure
-    if error:
-        if error.code=='10002':
-            raise HTTPException(503,'Tu cuenta Trial de Twilio no permite verificar números por API (10002). Agrega y verifica el número en Twilio → Try out Voice. Después pulsa Actualizar llamadas en SISMOCORE. Repetir esta solicitud no elimina la restricción.')
-        if error.code in ('CONEXION','RESPUESTA_INVALIDA'):
-            raise HTTPException(503,'No se pudo confirmar la solicitud. Puede que Twilio haya iniciado la llamada; no la repitas de inmediato. Comprueba el número en su consola.')
-        raise HTTPException(503,'Twilio rechazó la verificación por API. Puede deberse a restricciones Trial o del destino. Verifica el número en Try out Voice de Twilio; SISMOCORE podrá utilizarlo después.')
-    return {'verificado':False,'id':reference,'codigo':result['codigo'],'ultimos':body.telefono[-4:]}
-
-
-@router.get('/verificaciones/{reference}')
-async def check_verification(reference:UUID,user=Depends(admin)):
-    rows=await database.request('GET','auditoria',params={'select':'despues','id':'eq.'+str(reference),
-        'actor_id':'eq.'+user['id'],'entidad':'eq.voz_verificaciones','accion':'eq.voz.solicitar',
-        'despues->>cuenta':'eq.'+voice_provider.account_hash,'limit':'1'})
-    if not rows:raise HTTPException(404,'Esta verificación no pertenece a tu cuenta o ya no está disponible.')
-    try:numbers=await voice_provider.recipients()
-    except VoiceError as failure:raise provider_error(failure) from failure
-    destination=rows[0]['despues']['destino']
-    return {'verificado':destination in numbers,'ultimos':rows[0]['despues']['ultimos']}
-
-
 def provider_error(failure):
     messages={
         'SIN_CONFIGURACION':'Falta completar la configuración privada de Twilio en este servidor.',

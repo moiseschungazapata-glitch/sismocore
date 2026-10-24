@@ -3,7 +3,6 @@ import { Badge, Button, ConfirmDialog, Panel } from '../../components/ui'
 import { fecha } from '../../lib/format'
 import { loadVoiceTrial, startVoiceTrial, refreshVoiceTrial, type VoiceTrial as Trial } from '../../services/voice'
 import AutomaticVoice from './AutomaticVoice'
-import PhoneVerification from './PhoneVerification'
 
 const states:Record<string,string>={solicitada:'Solicitud registrada',queued:'En cola de Twilio',initiated:'Iniciando',ringing:'Sonando',
   'in-progress':'Llamada en curso',completed:'Llamada finalizada',busy:'Teléfono ocupado',failed:'Fallida',
@@ -40,7 +39,6 @@ export default function VoiceTrial(){
   const exhausted=!!limit&&(limit.usadas_hoy>=limit.limite_diario||limit.usadas_total>=limit.limite_total)
   return <>
     <AutomaticVoice targets={data?.destinatarios||[]} revision={revision}/>
-    <PhoneVerification configured={!!data?.configurada} onVerified={()=>setRevision(value=>value+1)}/>
     <details className="alerts-tools"><summary>Probar una llamada<span>Comprobar recepción y ver pruebas recientes</span></summary>
     <Panel title="Llamadas de prueba" description="Comprueba la recepción antes de autorizar tu teléfono.">
       {error&&<p className="inline-error" role="alert">{error}</p>}
