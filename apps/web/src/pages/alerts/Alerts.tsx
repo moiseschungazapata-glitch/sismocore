@@ -4,8 +4,9 @@ import { fecha } from '../../lib/format'
 import { currentPushDevice, deactivatePush, enablePush, notificationStatus, pushSupport, sendPushTest, type PushDevice, type PushStatus } from '../../services/notifications'
 import './alerts.css'
 import { Rules, AlertHistory } from './Rules'
+import VoiceTrial from './VoiceTrial'
 
-export default function Alerts({ userId,manageRules=false }: { userId:string;manageRules?:boolean }) {
+export default function Alerts({ userId,manageRules=false,manageCalls=false }: { userId:string;manageRules?:boolean;manageCalls?:boolean }) {
   const [status,setStatus] = useState<PushStatus | null>(null)
   const [error,setError] = useState('')
   const [message,setMessage] = useState('')
@@ -67,6 +68,7 @@ export default function Alerts({ userId,manageRules=false }: { userId:string;man
       </li>)}</ul>}
       <p className="push-caption">Una prueba por minuto. Que Firebase acepte el mensaje no confirma su entrega; comprueba que aparezca en tu celular. Al cerrar sesión se desactiva este navegador.</p>
     </Panel>
+    {manageCalls&&<VoiceTrial/>}
     {manageRules&&<Rules userId={userId}/>}
     <AlertHistory manage={manageRules}/>
     <p className="push-caption">Los avisos automáticos dependen de las reglas configuradas por administración y de la sincronización programada. Los reportes del IGP describen eventos ya ocurridos; no predicen sismos ni garantizan un aviso antes de sentirlos.</p>

@@ -22,6 +22,9 @@ class Settings:
     FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID', 'sismocore-5af68')
     FIREBASE_SERVICE_ACCOUNT_JSON = os.getenv('FIREBASE_SERVICE_ACCOUNT_JSON', '')
     PUBLIC_APP_URL = os.getenv('PUBLIC_APP_URL','https://sismocore.vercel.app').rstrip('/')
+    TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID','')
+    TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN','')
+    TWILIO_FROM_NUMBER = os.getenv('TWILIO_FROM_NUMBER','')
 
     @property
     def database_configured(self):
