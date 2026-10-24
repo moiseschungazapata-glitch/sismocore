@@ -11,13 +11,14 @@ try {
     await context.addInitScript(({id,userId}) => localStorage.setItem('sismocore.push-device.v1',JSON.stringify({id,userId})),{id,userId:user.id})
     const page=await context.newPage()
     const errors=[]; page.on('pageerror',error=>errors.push(error.message))
-    let configured=false; let active=true; let sends=0; let deactivations=0
+    let role='administrador';let automatic=true;let switches=0;let configured=false; let active=true; let sends=0; let deactivations=0
     await page.route('**/api/v1/**',async route => {
       const path=new URL(route.request().url()).pathname
       let body={}
       if (path.endsWith('/alertas/historial')) body={entregas:[]}
-      else if (path.endsWith('/auth/me')) body={user}
-      else if(path.endsWith('/notificaciones')) body={configurada:configured,automaticas_activas:false,dispositivos:active ? [{id,etiqueta:'Chrome en Android',activo:true,registrado_en:'2026-10-24T01:00:00Z',ultima_prueba_en:null}] : []}
+      else if (path.endsWith('/auth/me')) body={user:{...user,rol:role,permisos:[...user.permisos,...(role==='administrador'?['usuarios.administrar']:[])]}}
+      else if(path.endsWith('/notificaciones')) body={configurada:configured,automaticas_activas:automatic,automaticas_habilitadas:automatic,reglas_activas:true,puede_configurar_automaticas:role==='administrador',dispositivos:active ? [{id,etiqueta:'Chrome en Android',activo:true,registrado_en:'2026-10-24T01:00:00Z',ultima_prueba_en:null}] : []}
+      else if(path.endsWith('/notificaciones/automaticas')){const data=route.request().postDataJSON();assert.equal(data.confirmado,true);automatic=data.activa;switches++;body={message:automatic?'Notificaciones automáticas habilitadas.':'Notificaciones automáticas pausadas.'}}
       else if(path.endsWith('/prueba')) { sends++; body={estado:'aceptada',message:'Firebase aceptó la notificación de prueba. Comprueba su recepción en este dispositivo.'} }
       else if(path.endsWith('/desactivar')) { deactivations++; active=false; body={message:'Desactivado'} }
       else if(path.endsWith('/eventos')) body={eventos:[],total:0,periodo_dias:30,codigo_fuente:'igp',consultado_en:new Date().toISOString()}
@@ -29,6 +30,13 @@ try {
     await page.getByRole('heading',{name:'Tus dispositivos',exact:true}).waitFor()
     await page.getByText('Envío pendiente de configuración.',{exact:true}).waitFor()
     assert.equal(await page.getByRole('button',{name:'Enviar prueba',exact:true}).isDisabled(),true)
+    await page.getByRole('button',{name:'Pausar notificaciones automáticas',exact:true}).click()
+    await page.getByRole('button',{name:'Cancelar',exact:true}).click();assert.equal(switches,0)
+    await page.getByRole('button',{name:'Pausar notificaciones automáticas',exact:true}).click()
+    await page.getByRole('button',{name:'Sí, pausar notificaciones',exact:true}).click()
+    await page.getByRole('button',{name:'Habilitar notificaciones automáticas',exact:true}).waitFor()
+    assert.equal(automatic,false);assert.equal(switches,1)
+    assert.equal(await page.getByRole('button',{name:'Habilitar notificaciones automáticas',exact:true}).isDisabled(),true)
     configured=true
     await page.getByRole('button',{name:'Actualizar lista'}).click()
     await page.getByText('Envío pendiente de configuración.',{exact:true}).waitFor({state:'detached'})
@@ -38,7 +46,11 @@ try {
     await page.getByRole('button',{name:'Enviar prueba',exact:true}).click()
     await page.getByRole('dialog').getByRole('button',{name:'Enviar prueba',exact:true}).click()
     await page.getByText('Firebase aceptó la notificación de prueba. Comprueba su recepción en este dispositivo.',{exact:true}).waitFor()
-    assert.equal(sends,1)
+    assert.equal(sends,1);assert.equal(automatic,false)
+    await page.getByRole('button',{name:'Habilitar notificaciones automáticas',exact:true}).click()
+    await page.getByRole('button',{name:'Sí, habilitar notificaciones',exact:true}).click()
+    await page.getByRole('button',{name:'Pausar notificaciones automáticas',exact:true}).waitFor()
+    assert.equal(automatic,true);assert.equal(switches,2)
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
     if (process.env.AXE_PATH) {
       await page.addScriptTag({path:process.env.AXE_PATH})
@@ -64,6 +76,8 @@ try {
     await page.getByText('Aún no tienes dispositivos activados.',{exact:false}).waitFor()
     assert.equal(deactivations,1)
     assert.equal(await page.evaluate(()=>localStorage.getItem('sismocore.push-device.v1')),null)
+    role='lectura';await page.reload();await page.getByRole('heading',{name:'Notificaciones automáticas',exact:true}).waitFor()
+    assert.equal(await page.getByRole('button',{name:'Pausar notificaciones automáticas',exact:true}).count(),0)
     assert.deepEqual(errors,[])
     await context.close()
     console.log(`${mobile?'Android (vista simulada)':'Escritorio'}: confirmaciones, bloqueo sin credencial, permisos, prueba simulada, revocación y receptor verificados.`)

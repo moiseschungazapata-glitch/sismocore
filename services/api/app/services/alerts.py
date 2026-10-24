@@ -10,7 +10,11 @@ from app.services.automatic_voice import process_automatic_calls
 async def process_push_alerts():
     if not push_sender.configured:
         rules=await database.request('GET','reglas_alerta',params={'select':'id','activa':'eq.true','canales':'cs.{push}','limit':'1'})
-        if rules: raise RuntimeError('Hay reglas activas pero falta la credencial de Firebase en el ejecutor de sincronización.')
+        if rules:
+            sources=await database.request('GET','fuentes_datos',params={'codigo':'eq.igp','select':'limites','limit':'1'})
+            flags=sources[0].get('limites',{}) if isinstance(sources,list) and sources else {}
+            if flags.get('push_habilitado') is False:return {'estado':'pausadas','aceptadas':0,'fallidas':0}
+            raise RuntimeError('Hay reglas activas pero falta la credencial de Firebase en el ejecutor de sincronización.')
         return {'estado':'sin_reglas_activas','aceptadas':0,'fallidas':0}
     origin=urlparse(settings.PUBLIC_APP_URL)
     if origin.scheme!='https' or not origin.netloc or origin.username or origin.password or origin.path or origin.query or origin.fragment:

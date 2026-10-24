@@ -140,3 +140,12 @@ class ProcessorTests(unittest.IsolatedAsyncioTestCase):
     async def test_missing_worker_credential_fails_if_rules_are_active(self):
         with patch.object(PushSender,'configured',new_callable=PropertyMock,return_value=False),patch('app.services.alerts.database.request',new=AsyncMock(return_value=[{'id':TARGET}])):
             with self.assertRaisesRegex(RuntimeError,'notificaciones'): await process_alerts()
+
+    async def test_paused_notifications_do_not_require_firebase(self):
+        async def db(method,table,**kwargs):
+            if table=='reglas_alerta':return [{'id':TARGET}]
+            if table=='fuentes_datos':return [{'limites':{'push_habilitado':False}}]
+            raise AssertionError('Intento reservar envios mientras estaban pausados')
+        with patch.object(PushSender,'configured',new_callable=PropertyMock,return_value=False),patch('app.services.alerts.database.request',new=AsyncMock(side_effect=db)):
+            result=await process_alerts()
+        self.assertEqual(result['estado'],'pausadas')

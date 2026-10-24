@@ -62,6 +62,47 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(next(call[2]['params']['usuario_id'] for call in self.calls if call[1]=='dispositivos_notificacion'),'eq.'+USER)
             self.assertFalse(response.json()['automaticas_activas'])
 
+    async def test_only_administration_can_change_global_notifications(self):
+        with patch('app.services.audit.record',new=AsyncMock()):
+            for role in ['lectura','analista','auditor','operador']:
+                self.actor['rol']=role
+                response=await self.client.post('/api/v1/notificaciones/automaticas',headers=ORIGIN,json={'activa':False,'confirmado':True})
+                self.assertEqual(response.status_code,403)
+        self.assertFalse(self.calls)
+        self.actor['rol']='administrador'
+        response=await self.client.post('/api/v1/notificaciones/automaticas',headers=ORIGIN,json={'activa':False,'confirmado':True})
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(self.calls[-1][2]['data']['p_actor'],USER)
+        self.assertFalse(self.calls[-1][2]['data']['p_activa'])
+        self.send.assert_not_awaited()
+
+    async def test_global_switch_requires_confirmation_and_trusted_origin(self):
+        self.actor['rol']='administrador'
+        for body in [{'activa':True},{'activa':True,'confirmado':False},{'activa':True,'confirmado':True,'actor':DEVICE}]:
+            response=await self.client.post('/api/v1/notificaciones/automaticas',headers=ORIGIN,json=body)
+            self.assertEqual(response.status_code,422)
+        response=await self.client.post('/api/v1/notificaciones/automaticas',headers={'Origin':'https://evil.invalid'},json={'activa':True,'confirmado':True})
+        self.assertEqual(response.status_code,403)
+        self.assertFalse(self.calls)
+
+    async def test_can_pause_without_firebase_but_cannot_enable(self):
+        self.actor['rol']='administrador';self.config.return_value=False
+        response=await self.client.post('/api/v1/notificaciones/automaticas',headers=ORIGIN,json={'activa':True,'confirmado':True})
+        self.assertEqual(response.status_code,503)
+        self.assertFalse(self.calls)
+        response=await self.client.post('/api/v1/notificaciones/automaticas',headers=ORIGIN,json={'activa':False,'confirmado':True})
+        self.assertEqual(response.status_code,200)
+        self.send.assert_not_awaited()
+
+    async def test_paused_status_is_distinct_from_active_rules(self):
+        with patch('app.services.database.database.request',new=AsyncMock(side_effect=[[],[{'id':DEVICE}],[{'limites':{'push_habilitado':False}}]])):
+            response=await self.client.get('/api/v1/notificaciones')
+        self.assertEqual(response.status_code,200)
+        self.assertTrue(response.json()['reglas_activas'])
+        self.assertFalse(response.json()['automaticas_habilitadas'])
+        self.assertFalse(response.json()['automaticas_activas'])
+        self.assertFalse(response.json()['puede_configurar_automaticas'])
+
     async def test_anonymous_cannot_read_devices(self):
         app.dependency_overrides.clear()
         response=await self.client.get('/api/v1/notificaciones')

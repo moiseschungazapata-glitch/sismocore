@@ -5,6 +5,7 @@ import { currentPushDevice, deactivatePush, enablePush, notificationStatus, push
 import './alerts.css'
 import { Rules, AlertHistory } from './Rules'
 import VoiceTrial from './VoiceTrial'
+import AutomaticPush from './AutomaticPush'
 import { Icon } from '../../components/Icon'
 
 export default function Alerts({ userId,manageRules=false,manageCalls=false }: { userId:string;manageRules?:boolean;manageCalls?:boolean }) {
@@ -70,6 +71,7 @@ export default function Alerts({ userId,manageRules=false,manageCalls=false }: {
         <button type="button" aria-pressed={channel==='voz'} onClick={()=>setChannel('voz')}><Icon name="wave" size={18}/><span>Llamadas<small>Teléfono autorizado</small></span></button>
       </nav>}
       {channel==='voz'&&manageCalls?<VoiceTrial/>:<>
+        <AutomaticPush status={status} onChanged={()=>setRevision(value=>value+1)}/>
         <Panel title="Tus dispositivos" description="Administra dónde recibes las notificaciones." action={<Button icon="refresh" disabled={busy} onClick={()=>{setError('');setRevision(value=>value+1)}}>Actualizar lista</Button>}>
           <div className="alerts-browser">
             <span className="alerts-channel-icon"><Icon name="alert" size={21}/></span>

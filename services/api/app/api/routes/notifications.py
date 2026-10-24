@@ -1,4 +1,5 @@
 from uuid import UUID
+from typing import Literal
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -12,6 +13,13 @@ from app.services.push import push_sender, PushError
 router = APIRouter(prefix='/notificaciones',tags=['Notificaciones personales'])
 METADATA = 'id,etiqueta,activo,registrado_en,actualizado_en,ultima_prueba_en,ultima_prueba_estado,ultimo_error_codigo'
 own_notifications = require_permission('notificaciones.propias')
+admin_notifications = require_permission('usuarios.administrar')
+
+
+class AutomaticPushSwitch(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    activa: bool
+    confirmado: Literal[True]
 
 
 class Registration(BaseModel):
@@ -43,9 +51,29 @@ async def status(user=Depends(own_notifications)):
         'select':METADATA,'usuario_id':f'eq.{user["id"]}','activo':'eq.true','order':'actualizado_en.desc','limit':'10'})
     rules=await database.request('GET','reglas_alerta',params={'select':'id','activa':'eq.true','canales':'cs.{push}',
         'destinatarios':'cs.'+json.dumps([user['id']]),'limit':'1'})
+    sources=await database.request('GET','fuentes_datos',params={'select':'limites','codigo':'eq.igp','limit':'1'})
+    flags=sources[0].get('limites',{}) if isinstance(sources,list) and sources else {}
+    enabled=flags.get('push_habilitado',True) is True
     return {'configurada':push_sender.configured,
             'dispositivos':[{key:row.get(key) for key in METADATA.split(',')} for row in rows],
-            'automaticas_activas':bool(rules)}
+            'automaticas_activas':enabled and bool(rules),'automaticas_habilitadas':enabled,
+            'reglas_activas':bool(rules),'puede_configurar_automaticas':user['rol']=='administrador'}
+
+
+@router.post('/automaticas')
+async def automatic_switch(body:AutomaticPushSwitch,request:Request,user=Depends(admin_notifications)):
+    guard(request,'push')
+    if body.activa and not push_sender.configured:
+        raise HTTPException(503,'Falta configurar Firebase en el servidor para habilitar los avisos automáticos.')
+    try:
+        await database.request('POST','rpc/sismocore_interruptor_push',data={
+            'p_actor':user['id'],'p_activa':body.activa,'p_correlacion':request.state.correlation_id})
+    except DatabaseError as failure:
+        if failure.code=='PT409':raise HTTPException(409,'La fuente IGP no está disponible. Actualiza e inténtalo de nuevo.') from failure
+        if failure.code=='PT403':raise HTTPException(403,'Solo administración puede cambiar este control.') from failure
+        raise
+    return {'message':'Notificaciones automáticas habilitadas para eventos nuevos.' if body.activa else
+            'Notificaciones automáticas pausadas. Un envío que ya esté en curso podría completarse.'}
 
 
 @router.post('/dispositivos')

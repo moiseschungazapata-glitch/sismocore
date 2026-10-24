@@ -5,7 +5,8 @@ export interface PushDevice {
   id:string; etiqueta:string; activo:boolean; registrado_en:string; actualizado_en:string
   ultima_prueba_en:string | null; ultima_prueba_estado:'pendiente' | 'aceptada' | 'fallida' | null; ultimo_error_codigo:string | null
 }
-export interface PushStatus { configurada:boolean; dispositivos:PushDevice[]; automaticas_activas:boolean }
+export interface PushStatus { configurada:boolean; dispositivos:PushDevice[]; automaticas_activas:boolean; automaticas_habilitadas?:boolean; reglas_activas?:boolean; puede_configurar_automaticas?:boolean }
+export const switchAutomaticPush=(activa:boolean)=>protectedRequest<{message:string}>('notificaciones/automaticas',{activa,confirmado:true})
 type Binding = { id:string; userId:string }
 const storageKey = 'sismocore.push-device.v1'
 let memoryBinding: Binding | null = null
