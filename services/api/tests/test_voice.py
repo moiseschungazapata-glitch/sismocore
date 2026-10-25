@@ -10,6 +10,8 @@ from main import app
 from app.services.auth import require_user
 from app.services.voice import voice_provider, VoiceProvider, VoiceError
 from app.services.database import DatabaseError
+from app.services.voice_demo import context, snapshot_url, read_snapshot
+from urllib.parse import urlparse,parse_qs
 from app.core.config import settings
 from app.api.routes.auth import attempts
 
@@ -19,6 +21,7 @@ PHONE='+51900000000'
 DEST='a'*64
 SID='CA'+'c'*32
 ORIGIN={'Origin':'http://localhost:5173'}
+EVENT={'id':ACTOR,'id_externo':'2026-751','magnitud':4.5,'profundidad':24,'lugar':'Caravelí, Arequipa','ocurrido_en':'2026-10-25T17:11:51Z'}
 
 
 class VoiceApiTests(unittest.IsolatedAsyncioTestCase):
@@ -26,10 +29,11 @@ class VoiceApiTests(unittest.IsolatedAsyncioTestCase):
         attempts.clear()
         self.actor={'id':ACTOR,'rol':'administrador','estado':'activo'}
         app.dependency_overrides[require_user]=lambda:dict(self.actor)
-        self.calls=[];self.error=None
+        self.calls=[];self.error=None;self.event=dict(EVENT)
         async def db(method,table,**kwargs):
             self.calls.append((table,kwargs))
-            if self.error: raise self.error
+            if self.error and table.startswith('rpc/'): raise self.error
+            if table=='eventos_sismicos':return [self.event] if self.event else []
             if table.endswith('sismocore_limites_voz') or table.endswith('sismocore_reservar_prueba_voz'):
                 return {'usadas_hoy':1,'usadas_total':1,'limite_diario':5,'limite_total':50,'espera_segundos':60}
             if table=='auditoria':
@@ -39,7 +43,7 @@ class VoiceApiTests(unittest.IsolatedAsyncioTestCase):
         self.patches=[patch('app.services.database.database.request',new=AsyncMock(side_effect=db)),
             patch.object(VoiceProvider,'configured',new_callable=PropertyMock,return_value=True),
             patch.object(voice_provider,'recipients',new=AsyncMock(return_value={DEST:PHONE})),
-            patch.object(voice_provider,'call',new=AsyncMock(return_value={'sid':SID,'estado':'queued'})),
+            patch.object(voice_provider,'call_snapshot',new=AsyncMock(return_value={'sid':SID,'estado':'queued'})),
             patch.object(voice_provider,'status',new=AsyncMock(return_value='completed'))]
         self.mocks=[p.start() for p in self.patches]
         self.client=httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://localhost:5173')
@@ -101,9 +105,9 @@ class VoiceApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(PHONE,response.text)
         self.assertNotIn(SID,response.text)
         self.assertEqual(response.json()['estado'],'queued')
-        self.assertEqual(self.calls[0][0],'rpc/sismocore_reservar_prueba_voz')
-        self.assertEqual(self.calls[0][1]['data']['p_actor'],ACTOR)
-        self.mocks[3].assert_awaited_once_with(PHONE)
+        claim=next(row for row in self.calls if row[0]=='rpc/sismocore_reservar_prueba_voz')
+        self.assertEqual(claim[1]['data']['p_actor'],ACTOR)
+        self.mocks[3].assert_awaited_once_with(PHONE,context(EVENT))
 
     async def test_timeout_is_recorded_without_retry_or_delivery_claim(self):
         self.mocks[3].side_effect=VoiceError('CONEXION')
@@ -111,6 +115,34 @@ class VoiceApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code,503)
         self.assertEqual(self.calls[-1][1]['data']['p_estado'],'desconocida')
         self.mocks[3].assert_awaited_once()
+
+    async def test_preview_and_changed_or_missing_event_do_not_consume_quota(self):
+        response=await self.client.get('/api/v1/voz/pruebas')
+        event=response.json()['ultimo_evento']
+        self.assertEqual(event['id_externo'],'2026-751')
+        self.calls.clear();self.event={**EVENT,'magnitud':4.6}
+        response=await self.client.post('/api/v1/voz/pruebas',headers=ORIGIN,json={'destino_id':DEST,'confirmado':True,'evento_id':event['id'],'evento_huella':event['huella']})
+        self.assertEqual(response.status_code,409)
+        self.assertFalse(any(table=='rpc/sismocore_reservar_prueba_voz' for table,_ in self.calls))
+        self.event=None
+        response=await self.client.post('/api/v1/voz/pruebas',headers=ORIGIN,json={'destino_id':DEST,'confirmado':True})
+        self.assertEqual(response.status_code,409);self.mocks[3].assert_not_awaited()
+
+    async def test_signed_xml_reads_snapshot_in_peru_time_without_new_call(self):
+        url=snapshot_url('https://example.invalid',settings.TWILIO_AUTH_TOKEN,EVENT)
+        path=urlparse(url).path+'?'+urlparse(url).query
+        app.dependency_overrides.clear()
+        response=await self.client.get(path)
+        self.assertEqual(response.status_code,200)
+        text=ElementTree.fromstring(response.content).find('Say').text
+        for phrase in ['Último evento registrado','4 coma 5','Caravelí','25 de octubre de 2026','12:11:51','24 kilómetros','ya ocurrido']:
+            self.assertIn(phrase,text)
+        self.assertNotIn('prueba',text.lower())
+        self.assertNotIn('simulacro',text.lower())
+        self.mocks[3].assert_not_awaited()
+        query=parse_qs(urlparse(url).query)
+        response=await self.client.post('/api/v1/voz/catalogo.xml',params={'datos':query['datos'][0]+'A','firma':query['firma'][0]})
+        self.assertEqual(response.status_code,403)
 
     async def test_status_cannot_query_another_users_reference(self):
         response=await self.client.post('/api/v1/voz/pruebas/'+ACTOR+'/actualizar',headers=ORIGIN,json={})
@@ -124,6 +156,17 @@ class VoiceApiTests(unittest.IsolatedAsyncioTestCase):
 
 
 class VoiceProviderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_manual_snapshot_keeps_trial_console_fields(self):
+        with patch.object(voice_provider,'check_trial',new=AsyncMock()),patch.object(voice_provider,'request',new=AsyncMock(return_value={'sid':SID,'status':'queued'})) as request:
+            await voice_provider.call_snapshot(PHONE,EVENT)
+        sent=request.await_args.kwargs['data']
+        self.assertEqual(set(sent),{'To','From','Url'})
+        self.assertEqual(sent['To'],PHONE)
+        parsed=urlparse(sent['Url'])
+        self.assertEqual(parsed.path,'/api/v1/voz/catalogo.xml')
+        query=parse_qs(parsed.query)
+        self.assertEqual(read_snapshot(query['datos'][0],query['firma'][0],settings.TWILIO_AUTH_TOKEN)['id_externo'],'2026-751')
+
     async def test_full_account_blocked_before_recipient_discovery(self):
         with patch.object(voice_provider,'request',new=AsyncMock(return_value={'sid':settings.TWILIO_ACCOUNT_SID,'type':'Full','status':'active'})) as request:
             with self.assertRaises(VoiceError) as failure: await voice_provider.recipients()
@@ -164,3 +207,22 @@ class VoiceProviderTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(VoiceError) as failure:await voice_provider.request('POST','/Calls.json',data={'To':PHONE})
         self.assertEqual(failure.exception.code,'21219')
         self.assertNotIn(PHONE,str(failure.exception))
+
+class ManualSnapshotTests(unittest.TestCase):
+    def test_tamper_expiry_and_frozen_snapshot(self):
+        with patch('app.services.voice_demo.time.time',return_value=1000):
+            url=snapshot_url('https://example.invalid','test-key',EVENT)
+        query=parse_qs(urlparse(url).query);data=query['datos'][0];signature=query['firma'][0]
+        with patch('app.services.voice_demo.time.time',return_value=1200):
+            frozen=read_snapshot(data,signature,'test-key')
+            self.assertEqual(frozen['magnitud'],4.5)
+            with self.assertRaises(ValueError):read_snapshot(data,signature,'other-key')
+        with patch('app.services.voice_demo.time.time',return_value=1601):
+            with self.assertRaises(ValueError):read_snapshot(data,signature,'test-key')
+
+    def test_xml_escapes_source_text(self):
+        from app.services.automatic_voice import event_twiml
+        xml=event_twiml(context({**EVENT,'lugar':'<Dial>contenido</Dial> & Perú'}),latest=True)
+        root=ElementTree.fromstring(xml)
+        self.assertEqual([e.tag for e in root],['Say','Hangup'])
+        self.assertIn('<Dial>',root.find('Say').text)

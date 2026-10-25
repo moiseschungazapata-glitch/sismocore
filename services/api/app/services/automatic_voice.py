@@ -7,7 +7,7 @@ from app.services.database import database
 from app.services.voice import voice_provider,VoiceError
 
 
-def event_twiml(context):
+def event_twiml(context, *, latest=False):
     magnitude=float(context['magnitud'])
     if not math.isfinite(magnitude) or not 0<=magnitude<=10: raise ValueError('Magnitud invalida')
     date=datetime.fromisoformat(context['ocurrido_en'].replace('Z','+00:00'))
@@ -18,8 +18,11 @@ def event_twiml(context):
     magnitude=f'{magnitude:.1f}'.replace('.',' coma ')
     root=Element('Response')
     say=SubElement(root,'Say',{'voice':'man','language':'es'})
-    say.text=(f'Aviso de SISMOCORE. El IGP reportó un sismo de magnitud {magnitude}. {place}. '
-        f'Ocurrió el {date.day} de {months[date.month-1]} de {date.year}, a las {date:%H:%M}, hora de Perú. '
+    opening='Último evento registrado en SISMOCORE.' if latest else 'Aviso de SISMOCORE.'
+    clock=date.strftime('%H:%M:%S' if latest else '%H:%M')
+    depth=f"Profundidad de {float(context['profundidad']):g} kilómetros. " if latest else ''
+    say.text=(f'{opening} El IGP reportó un sismo de magnitud {magnitude}. {place}. '
+        f'Ocurrió el {date.day} de {months[date.month-1]} de {date.year}, a las {clock}, hora de Perú. '+depth+
         'Es un evento ya ocurrido. No es una predicción ni una alerta oficial.')
     SubElement(root,'Hangup')
     return tostring(root,encoding='utf-8',xml_declaration=True)

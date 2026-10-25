@@ -3,6 +3,7 @@ import {pathToFileURL} from 'node:url'
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE?pathToFileURL(process.env.PLAYWRIGHT_MODULE).href:'playwright')
 const base=process.env.SMOKE_URL||'http://127.0.0.1:5177'
 const reference='22222222-2222-4222-8222-222222222222'
+const latest={id:'33333333-3333-4333-8333-333333333333',id_externo:'2026-751',magnitud:4.5,profundidad:24,lugar:'35 km al SE de Caravelí, Caravelí - Arequipa',ocurrido_en:'2026-10-25T17:11:51Z',huella:'b'.repeat(64)}
 const browser=await chromium.launch({channel:'chrome',headless:true})
 try{
  for(const mobile of [false,true]){
@@ -21,11 +22,11 @@ try{
    else if(path.endsWith('/voz/telefono/desactivar')){linked=false;writes++;json={message:'Autorización retirada'}}
    else if(path.endsWith('/voz/pruebas')&&route.request().method()==='GET'){
     voiceReads++
-    json={configurada:configured,automaticas:false,destinatarios:configured?[{id:'a'.repeat(64),etiqueta:'Perú · celular terminado en 1234'}]:[],
+    json={configurada:configured,automaticas:false,ultimo_evento:configured?latest:null,destinatarios:configured?[{id:'a'.repeat(64),etiqueta:'Perú · celular terminado en 1234'}]:[],
      limites:configured?{usadas_hoy:calls,usadas_total:calls,limite_diario:5,limite_total:50,espera_segundos:calls?60:0}:null,
      historial:calls?[{id:reference,fecha:'2026-10-24T12:00:00Z',ultimos:'1234',estado:completed?'completed':'queued'}]:[]}
    }else if(path.endsWith('/voz/pruebas')&&route.request().method()==='POST'){
-    assert.deepEqual(route.request().postDataJSON(),{destino_id:'a'.repeat(64),confirmado:true});calls++
+    assert.deepEqual(route.request().postDataJSON(),{destino_id:'a'.repeat(64),confirmado:true,evento_id:latest.id,evento_huella:latest.huella});calls++
     json={id:reference,estado:'queued',message:'Twilio aceptó la solicitud. Comprueba si recibes la llamada y actualiza su estado; esto no confirma que hayas contestado.'}
    }else if(path.endsWith('/actualizar')){completed=true;json={estado:'completed'}}
    else throw new Error('Solicitud inesperada: '+path)
@@ -38,6 +39,8 @@ try{
   await page.locator('.alerts-tools > summary').filter({hasText:'Probar una llamada'}).click()
   const button=page.getByRole('button',{name:'Realizar llamada de prueba',exact:true})
   await page.getByLabel('Destinatario de la llamada de prueba').waitFor()
+  await page.getByRole('heading',{name:latest.lugar,exact:true}).waitFor()
+  assert.match(await page.locator('.voice-event-preview').textContent(),/12:11:51/)
   assert.equal(await button.isDisabled(),true)
   assert.equal(await page.getByRole('button',{name:'Habilitar llamadas automáticas',exact:true}).isDisabled(),true)
   await page.getByLabel('Destinatario de la llamada de prueba').selectOption('a'.repeat(64))

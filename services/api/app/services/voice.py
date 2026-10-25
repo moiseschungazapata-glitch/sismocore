@@ -69,6 +69,11 @@ class VoiceProvider:
     async def call(self,phone):
         return await self._create_call(phone,self._origin()+'/api/v1/voz/prueba.xml')
 
+    async def call_snapshot(self,phone,event):
+        from app.services.voice_demo import snapshot_url
+        url=snapshot_url(self._origin(),settings.TWILIO_AUTH_TOKEN,event)
+        return await self._create_call(phone,url)
+
     def _origin(self):
         origin=urlparse(settings.PUBLIC_APP_URL)
         if origin.scheme!='https' or not origin.netloc or origin.path or origin.query or origin.fragment or origin.username or origin.password:

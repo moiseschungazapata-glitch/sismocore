@@ -2,12 +2,14 @@ from uuid import UUID
 from typing import Literal
 from fastapi import APIRouter, Response, Depends, Request, HTTPException, Query
 import hmac
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.core.config import settings
 from app.api.routes.auth import guard
 from app.services.database import database, DatabaseError
 from app.services.permissions import require_permission
 from app.services.voice import voice_provider, VoiceError
 from app.services.automatic_voice import event_twiml
+from app.services.voice_demo import latest_event, read_snapshot
 
 router = APIRouter(prefix='/voz', tags=['Prueba de voz'])
 admin = require_permission('voz.probar')
@@ -24,6 +26,17 @@ TRIAL_TWIML = '''<?xml version="1.0" encoding="UTF-8"?>
 @router.api_route('/prueba.xml', methods=['GET', 'POST'], response_class=Response)
 async def trial_instructions():
     return Response(content=TRIAL_TWIML, media_type='application/xml')
+
+
+@router.api_route('/catalogo.xml',methods=['GET','POST'],response_class=Response)
+async def manual_instructions(datos:str=Query(max_length=1800),firma:str=Query(pattern=r'^[a-f0-9]{64}$')):
+    denied=Response(content='<Response><Hangup/></Response>',status_code=403,media_type='application/xml')
+    if not voice_provider.configured: return denied
+    try:
+        event=read_snapshot(datos,firma,settings.TWILIO_AUTH_TOKEN)
+        content=event_twiml(event,latest=True)
+    except (ValueError,TypeError,KeyError,OverflowError): return denied
+    return Response(content=content,media_type='application/xml')
 
 
 @router.api_route('/eventos/{delivery}.xml',methods=['GET','POST'],response_class=Response)
@@ -48,6 +61,16 @@ class AutomaticSwitch(BaseModel):
     model_config=ConfigDict(extra='forbid')
     activa:bool
     confirmado:Literal[True]
+
+
+class ManualCallRequest(CallRequest):
+    evento_id:UUID | None=None
+    evento_huella:str | None=Field(default=None,pattern=r'^[a-f0-9]{64}$')
+
+    @model_validator(mode='after')
+    def complete_preview(self):
+        if (self.evento_id is None)!=(self.evento_huella is None): raise ValueError('Vista previa incompleta')
+        return self
 
 
 def provider_error(failure):
@@ -98,28 +121,32 @@ async def history_for(user):
 @router.get('/pruebas')
 async def test_settings(user=Depends(admin)):
     if not voice_provider.configured:
-        return {'configurada':False,'destinatarios':[],'historial':[],'limites':None,'automaticas':False}
+        return {'configurada':False,'destinatarios':[],'historial':[],'limites':None,'automaticas':False,'ultimo_evento':None}
     try: numbers=await voice_provider.recipients()
     except VoiceError as failure: raise provider_error(failure) from failure
     limits=await voice_rpc('sismocore_limites_voz',{'p_cuenta':voice_provider.account_hash})
     history=await history_for(user)
-    return {'configurada':True,'automaticas':False,'limites':limits,
+    return {'configurada':True,'automaticas':False,'limites':limits,'ultimo_evento':await latest_event(),
         'destinatarios':[{'id':key,'etiqueta':'Perú · celular terminado en '+phone[-4:]} for key,phone in sorted(numbers.items())],
         'historial':[{key:value for key,value in row.items() if key!='proveedor_id'} for row in history]}
 
 
 @router.post('/pruebas')
-async def create_test(body:CallRequest,request:Request,user=Depends(admin)):
+async def create_test(body:ManualCallRequest,request:Request,user=Depends(admin)):
     guard(request,'voice')
     try: numbers=await voice_provider.recipients()
     except VoiceError as failure: raise provider_error(failure) from failure
     phone=numbers.get(body.destino_id)
     if not phone: raise HTTPException(422,'Selecciona un destino verificado disponible en la lista y actualiza si fuera necesario.')
+    event=await latest_event()
+    if not event: raise HTTPException(409,'No hay un evento IGP completo disponible para narrar. Actualiza el catálogo antes de realizar la llamada.')
+    if body.evento_id and (str(body.evento_id)!=event['id'] or body.evento_huella!=event['huella']):
+        raise HTTPException(409,'El último evento cambió. Actualiza la sección y confirma nuevamente sus datos; no se realizó ninguna llamada.')
     reference=request.state.correlation_id
     await voice_rpc('sismocore_reservar_prueba_voz',{'p_actor':user['id'],'p_cuenta':voice_provider.account_hash,
         'p_destino':body.destino_id,'p_ultimos':phone[-4:],'p_referencia':reference})
     error=None;result=None
-    try: result=await voice_provider.call(phone)
+    try: result=await voice_provider.call_snapshot(phone,event)
     except VoiceError as failure: error=failure
     uncertain=error and error.code in ('CONEXION','RESPUESTA_INVALIDA')
     state=result['estado'] if result else 'desconocida' if uncertain else 'rechazada'
