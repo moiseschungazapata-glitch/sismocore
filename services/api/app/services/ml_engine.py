@@ -13,6 +13,40 @@ class DataError(Exception):
     pass
 
 
+def select_classifier(X,y,dates,seed):
+    """Tune only on expanding historical folds inside the training partition."""
+    import numpy as np
+    from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.model_selection import TimeSeriesSplit
+    from sklearn.metrics import f1_score
+    timestamps=np.asarray(dates);unique=np.unique(timestamps);folds=[]
+    if len(unique)>=4:
+        for before,after in TimeSeriesSplit(n_splits=3).split(unique):
+            a=np.flatnonzero(np.isin(timestamps,unique[before]));b=np.flatnonzero(np.isin(timestamps,unique[after]))
+            if len(a)>=12 and len(b)>=4 and len(np.unique(y[a]))>=2:folds.append((a,b))
+    def pipeline(params):
+        return make_pipeline(StandardScaler(),LogisticRegression(**params,random_state=seed))
+    candidates=[]
+    for weight in ['balanced',None]:
+        for C in [.1,1.,10.]:
+            params={'C':C,'class_weight':weight,'max_iter':1000,'solver':'lbfgs'}
+            scores=[]
+            if len(folds)>=2:
+                for a,b in folds:
+                    model=pipeline(params);model.fit(X[a],y[a])
+                    scores.append(float(f1_score(y[b],model.predict(X[b]),labels=[0,1,2],average='macro',zero_division=0)))
+            candidates.append({'parametros':params,'f1_folds':scores,'f1_media':float(np.mean(scores)) if scores else None})
+    # With insufficient folds use a disclosed fixed balanced configuration, never tune on the holdout.
+    selected=max(candidates,key=lambda c:c['f1_media']) if len(folds)>=2 else candidates[1]
+    manifest={'metodo':'validacion_temporal_interna' if len(folds)>=2 else 'configuracion_balanceada_fija',
+        'version_entrenamiento':2,'criterio':'F1 macro sobre los tres rangos','usa_evaluacion_final':False,
+        'folds':[{'n_entrenamiento':len(a),'n_validacion':len(b),'fin_entrenamiento':str(timestamps[a[-1]]),'inicio_validacion':str(timestamps[b[0]]),'fin_validacion':str(timestamps[b[-1]])} for a,b in folds],
+        'candidatos':candidates,'seleccionado':selected['parametros']}
+    return pipeline(selected['parametros']),selected['parametros'],manifest
+
+
 def prepare(rows,fraction,cutoff):
     if fraction not in (0.7,0.8):raise DataError('Partición no admitida.')
     clean=[];seen=set();duplicates=0;invalid=0
@@ -48,7 +82,7 @@ def train(snapshot,algorithm,seed):
     import pandas as pd
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import StandardScaler
-    from sklearn.linear_model import LinearRegression,LogisticRegression
+    from sklearn.linear_model import LinearRegression
     from sklearn.dummy import DummyRegressor,DummyClassifier
     from sklearn.metrics import mean_absolute_error,root_mean_squared_error,r2_score,precision_recall_fscore_support,confusion_matrix
     from threadpoolctl import threadpool_limits
@@ -61,10 +95,11 @@ def train(snapshot,algorithm,seed):
     classification=algorithm=='logistica'
     y=np.where(depth<70,0,np.where(depth<300,1,2)) if classification else depth
     if classification and len(np.unique(y[:split]))<2:raise DataError('La clasificación necesita al menos dos rangos de profundidad en el entrenamiento. Amplía el periodo del dataset.')
-    estimator=LogisticRegression(C=1,max_iter=1000,solver='lbfgs',random_state=seed) if classification else LinearRegression()
-    pipe=make_pipeline(StandardScaler(),estimator)
+    parameters={};selection=None
     dummy=DummyClassifier(strategy='prior',random_state=seed) if classification else DummyRegressor(strategy='mean')
     with threadpool_limits(limits=1):
+        if classification:pipe,parameters,selection=select_classifier(X[:split],y[:split],[r['ocurrido_en'] for r in rows[:split]],seed)
+        else:pipe=make_pipeline(StandardScaler(),LinearRegression())
         pipe.fit(X[:split],y[:split]);dummy.fit(X[:split],y[:split])
         predicted=pipe.predict(X[split:]);baseline=dummy.predict(X[split:])
     actual=y[split:];metrics={};reference={}
@@ -84,6 +119,19 @@ def train(snapshot,algorithm,seed):
         def scores(pred):return {'mae':float(mean_absolute_error(actual,pred)),'rmse':float(root_mean_squared_error(actual,pred)),'r2':float(r2_score(actual,pred)) if np.var(actual)>0 else None}
         metrics=scores(predicted);reference=scores(baseline)
     metrics['n_evaluacion']=len(actual)
+    warnings=[]
+    if len(actual)<30:warnings.append(f'Evaluación pequeña: {len(actual)} eventos. Las métricas pueden variar mucho con nuevos datos.')
+    if classification:
+        train_counts=np.bincount(y[:split],minlength=3);eval_counts=np.bincount(actual,minlength=3)
+        metrics['distribucion_clases']=[{'clase':label,'entrenamiento':int(train_counts[i]),'evaluacion':int(eval_counts[i])} for i,label in enumerate(CLASSES)]
+        for i,label in enumerate(CLASSES):
+            if train_counts[i]==0:warnings.append(f'Sin ejemplos de entrenamiento para: {label}. El modelo no puede aprender esta clase.')
+            elif train_counts[i]<10:warnings.append(f'Pocos ejemplos de entrenamiento para: {label} ({train_counts[i]}).')
+        if len(np.unique(predicted))==1:warnings.append('El modelo asignó una sola clase a toda la evaluación; no está distinguiendo los rangos.')
+        if metrics['f1']<=reference['f1']:warnings.append('El F1 de clasificación no supera la referencia sencilla.')
+    elif metrics['mae']>=reference['mae']:warnings.append('El error MAE no mejora la referencia sencilla.')
+    metrics['advertencias']=warnings
+    if selection:metrics['seleccion_temporal']=selection
     metrics['muestra']=[{'id_externo':row['id_externo'],'fecha':row['ocurrido_en'],'real':float(value),'estimado':float(pred)} for row,value,pred in zip(rows[split:split+100],actual[:100],predicted[:100])]
     scaler=pipe.steps[0][1];fitted=pipe.steps[1][1]
     libraries={name:version(name) for name in ['numpy','pandas','scikit-learn','joblib','scipy','threadpoolctl']};libraries['python']=platform.python_version()
@@ -92,8 +140,9 @@ def train(snapshot,algorithm,seed):
         'clases':fitted.classes_.astype(int).tolist() if classification else None,
         'rango_features':{key:[float(X[:split,j].min()),float(X[:split,j].max())] for j,key in enumerate(features)},
         'sigma_residuos':None if classification else float(np.std(y[:split]-pipe.predict(X[:split]),ddof=1)),
-        'versiones':libraries,'semilla':seed,'particion':snapshot['particion'],'advertencia':DISCLAIMER}
-    return {'metricas':metrics,'baseline':reference,'versiones_librerias':libraries,'artefacto':artifact}
+        'versiones':libraries,'semilla':seed,'particion':snapshot['particion'],'advertencia':DISCLAIMER,
+        'hiperparametros':parameters,'version_entrenamiento':2,'seleccion_temporal':selection}
+    return {'metricas':metrics,'baseline':reference,'versiones_librerias':libraries,'artefacto':artifact,'hiperparametros':parameters}
 
 
 def infer(artifact,values):

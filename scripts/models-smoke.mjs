@@ -8,6 +8,7 @@ const dataset = { id, nombre: 'Catálogo IGP', version: 1, estado: 'borrador', n
 const model = { id: modelId, nombre: 'Experimento IGP', version: 1, dataset_id: id, objetivo: 'Análisis retrospectivo de profundidad', tarea: 'regresion', algoritmo: 'lineal_simple', features: ['magnitud'], target: 'profundidad', semilla: 42, hiperparametros: {}, versiones_librerias: { 'scikit-learn': '1.9.1' }, estado: 'evaluado', validacion: partition, metricas: { mae: 10, rmse: 12, r2: .3, n_evaluacion: 20, muestra: [{ id_externo: '2026-1', real: 30, estimado: 40 }] }, baseline: { mae: 15, rmse: 19, r2: -.1 }, limitaciones: 'Experimental. No predice terremotos.', artefacto_sha256: 'b'.repeat(64) }
 const classifier = { ...model, id: '44444444-4444-4444-8444-444444444444', nombre: 'Clasificador', tarea: 'clasificacion', algoritmo: 'logistica', target: 'rango_profundidad', features: ['magnitud', 'latitud', 'longitud'], metricas: { f1: .5, precision: .6, recall: .7, brier: .3, n_evaluacion: 20, clases: ['Superficial', 'Intermedio', 'Profundo'], matriz: [[5, 1, 0], [1, 8, 0], [0, 1, 4]], calibracion: [{ n: 20, confianza: .6, acierto: .7 }], muestra: [{ id_externo: '2026-2', real: 1, estimado: 1 }] }, baseline: { f1: .3, brier: .5 } }
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
+Object.assign(classifier.metricas, { advertencias: ['Evaluación pequeña: 20 eventos.', 'Sin ejemplos de entrenamiento para: Profundo.'], distribucion_clases: [{ clase: 'Superficial', entrenamiento: 60, evaluacion: 7 }, { clase: 'Intermedio', entrenamiento: 20, evaluacion: 13 }, { clase: 'Profundo', entrenamiento: 0, evaluacion: 0 }], seleccion_temporal: { metodo: 'validacion_temporal_interna', folds: [{}, {}, {}], seleccionado: { C: 1, class_weight: 'balanced' }, candidatos: [{ parametros: { C: 1, class_weight: 'balanced' }, f1_media: .4 }, { parametros: { C: 1, class_weight: null }, f1_media: .2 }] } })
 try {
  for (const width of [1365, 390, 320]) {
   const context = await browser.newContext({ viewport: { width, height: 900 } }), page = await context.newPage()
@@ -57,6 +58,8 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
   await page.screenshot({ path: `.runtime/ml-${width}.png`, fullPage: true })
   await page.getByRole('button', { name: 'Ver', exact: true }).last().click();await page.getByRole('heading', { name: 'Matriz de confusión' }).waitFor();await a11y()
+  await page.getByText('Ejemplos disponibles por clase', { exact: true }).click();await page.getByText('Cómo se eligió la configuración', { exact: true }).click();await a11y()
+  await page.screenshot({ path: `.runtime/ml-quality-${width}.png` })
   await page.locator('dialog[open]').getByRole('button', { name: 'Cerrar detalle' }).click()
   role = 'auditor';await page.reload();await page.getByRole('button', { name: 'Revisar datos' }).waitFor()
   assert.equal(await page.getByRole('button', { name: 'Preparar dataset', exact: true }).count(), 0)

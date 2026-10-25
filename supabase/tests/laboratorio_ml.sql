@@ -45,7 +45,8 @@ begin
  perform public.sismocore_finalizar_modelo_ml(analyst,m,'{"estado":"evaluado"}',correlation);
  raise exception 'FALLO: resultado incompleto'; exception when sqlstate 'PT422' then null; end;
  perform public.sismocore_finalizar_modelo_ml(analyst,m,jsonb_build_object('estado','evaluado','artefacto_path','modelos/'||m||'.json','artefacto_sha256',repeat('c',64),
- 'metricas','{"mae":10}'::jsonb,'baseline','{"mae":15}'::jsonb,'versiones_librerias','{"test":"1"}'::jsonb),correlation);
+ 'metricas','{"mae":10}'::jsonb,'baseline','{"mae":15}'::jsonb,'versiones_librerias','{"test":"1"}'::jsonb,'hiperparametros','{"class_weight":"balanced","C":0.1}'::jsonb),correlation);
+ if not exists(select 1 from public.modelos_ml where id=m and hiperparametros='{"class_weight":"balanced","C":0.1}'::jsonb) then raise exception 'FALLO: parámetros seleccionados no guardados'; end if;
  begin
  perform public.sismocore_finalizar_modelo_ml(analyst,m,'{"estado":"fallido"}',correlation);
  raise exception 'FALLO: sobrescritura de éxito'; exception when sqlstate 'PT409' then null; end;

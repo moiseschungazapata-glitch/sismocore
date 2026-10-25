@@ -64,6 +64,7 @@ try {
   await db.exec(await readFile(new URL('./sincronizacion_cron.sql',import.meta.url),'utf8'));
   console.log('Cron: instalacion pausada, reservas exclusivas, recuperacion de caidas y privacidad comprobadas con plataforma simulada.');
   await db.exec(await readFile(new URL('../migrations/20261025000300_laboratorio_ml.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../migrations/20261025000400_ajuste_clasificacion_ml.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('./laboratorio_ml.sql',import.meta.url),'utf8'));
   console.log('ML: permisos, publicación, versiones, reserva exclusiva, finalización, aprobación e inmutabilidad comprobados.');
   const tables = await db.query("select count(*)::int as total from pg_tables where schemaname='public'");

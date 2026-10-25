@@ -88,6 +88,41 @@ class EngineTests(unittest.TestCase):
         snapshot=engine.prepare(rows(),.8,CUTOFF);snapshot['filas'][0],snapshot['filas'][1]=snapshot['filas'][1],snapshot['filas'][0]
         with self.assertRaises(engine.DataError):engine.train(snapshot,'lineal_simple',42)
 
+    def test_tuning_never_uses_final_evaluation_and_preserves_timestamp_groups(self):
+        source=rows();source[24]['ocurrido_en']=source[23]['ocurrido_en']
+        snapshot=engine.prepare(source,.8,CUTOFF)
+        original=engine.train(snapshot,'logistica',42)
+        changed=copy.deepcopy(snapshot)
+        for r in changed['filas'][80:]:r.update(magnitud=9.5,latitud=75,longitud=100,profundidad=900)
+        altered=engine.train(changed,'logistica',42)
+        for key in ['hiperparametros','coef','intercepto','media','escala','seleccion_temporal']:
+            self.assertEqual(original['artefacto'][key],altered['artefacto'][key])
+        selection=original['metricas']['seleccion_temporal']
+        self.assertFalse(selection['usa_evaluacion_final'])
+        self.assertGreaterEqual(len(selection['folds']),2)
+        for fold in selection['folds']:
+            self.assertLess(fold['fin_entrenamiento'],fold['inicio_validacion'])
+            self.assertLess(fold['fin_validacion'],snapshot['particion']['inicio_evaluacion'])
+        self.assertEqual(original['artefacto']['version_entrenamiento'],2)
+
+    def test_missing_classes_and_small_holdout_are_disclosed(self):
+        source=rows()
+        for r in source:r['profundidad']%=250
+        result=engine.train(engine.prepare(source,.8,CUTOFF),'logistica',42)
+        self.assertEqual(result['metricas']['distribucion_clases'][2]['entrenamiento'],0)
+        self.assertTrue(any('Sin ejemplos' in w for w in result['metricas']['advertencias']))
+        self.assertTrue(any('Evaluación pequeña' in w for w in result['metricas']['advertencias']))
+
+    def test_insufficient_inner_folds_has_explicit_fixed_fallback(self):
+        import numpy as np
+        source=rows(30);dates=[source[0]['ocurrido_en']]*26+[r['ocurrido_en'] for r in source[26:]]
+        X=np.array([[r['magnitud'],r['latitud'],r['longitud']] for r in source]);y=np.array([i%2 for i in range(30)])
+        _,params,selection=engine.select_classifier(X,y,dates,42)
+        self.assertEqual(selection['metodo'],'configuracion_balanceada_fija')
+        self.assertEqual(params['class_weight'],'balanced')
+        self.assertEqual(params['C'],1)
+        self.assertTrue(all(c['f1_media'] is None for c in selection['candidatos']))
+
 
 class StorageTests(unittest.IsolatedAsyncioTestCase):
     async def test_private_round_trip_hash_and_size(self):
