@@ -101,6 +101,7 @@ export async function crearReporte(eventos: EventoSismico[], context: ReportCont
     ['Profundidad promedio (km)', eventos.length ? eventos.reduce((total, e) => total + e.profundidad, 0) / eventos.length : 'Sin dato'],
     ['Corte (UTC)', context.cutoff || 'Sin dato'],
     ['Referencia de exportación', context.exportId || 'Sin referencia'],
+    ...Object.entries({ 'Magnitud mínima':context.filters.minMagnitude,'Magnitud máxima':context.filters.maxMagnitude,'Profundidad mínima (km)':context.filters.minDepth,'Profundidad máxima (km)':context.filters.maxDepth,'Región seleccionada':context.filters.region,'Proveedor seleccionado':context.filters.source,'Centro latitud':context.filters.latitude,'Centro longitud':context.filters.longitude,'Radio (km)':context.filters.radius,'Polígono':context.filters.polygon }).filter(([,v])=>!!v).map(([k,v]):[string,string]=>[k,v!]),
     ['Observaciones', 'Datos observados por la fuente. Este reporte no constituye una predicción ni una alerta oficial.'],
   ]
   values.forEach(([label, value], index) => {
@@ -115,7 +116,7 @@ export async function crearReporte(eventos: EventoSismico[], context: ReportCont
     if (index % 2 === 0) row.eachCell(cell => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F7FA' } } })
   })
   for (const address of ['B13', 'B14']) summary.getCell(address).numFmt = '0.0'
-  summary.pageSetup = { orientation: 'portrait', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 1, printArea: 'A1:B17' }
+  summary.pageSetup = { orientation: 'portrait', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 1, printArea: `A1:B${values.length+2}` }
   return workbook
 }
 

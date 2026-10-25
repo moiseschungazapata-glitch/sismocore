@@ -12,17 +12,17 @@ try {
   await page.route('**/api/v1/auth/me',route => route.fulfill({ json:{ user:{ id:'analyst',nombre_completo:'Prueba',email:'test@example.org',rol:'lectura',estado:'activo',permisos:['catalogo.leer'] } } }));
   await page.route('**/health',route => route.fulfill({ json:{ estado:'saludable',base_datos:'conectada',configurada:true } }));
   await page.route('**/api/v1/eventos',route => route.fulfill({ json:{ eventos:events,total:events.length,consultado_en:cutoff,ultima_sincronizacion:cutoff,periodo_dias:30,codigo_fuente:'igp',fuente:'IGP',frecuencia_segundos:600,ultima_ejecucion:null } }));
-  await page.goto('http://localhost:5173/analisis');
+  await page.goto((process.env.SMOKE_URL||'http://localhost:5173')+'/analisis');
   await page.getByRole('heading',{ name:'Actividad diaria',exact:true }).waitFor();
   assert.equal(await page.locator('.daily-bar').count(),31);
   assert.deepEqual(await page.locator('.distribution-label strong').evaluateAll(nodes => nodes.map(node => Number(node.firstChild.textContent))),[40,17,0]);
-  assert.ok((await page.locator('.analysis-grid').boundingBox()).height < 550);
+  assert.ok((await page.locator('.analysis-grid').first().boundingBox()).height < 550);
   await page.getByText('Consultar datos diarios',{ exact:true }).click();
-  const totals = await page.locator('.daily-data tbody tr').evaluateAll(rows => rows.map(row => Number(row.lastElementChild.textContent)));
+  const totals = await page.locator('.daily-data').first().locator('tbody tr').evaluateAll(rows => rows.map(row => Number(row.lastElementChild.textContent)));
   assert.equal(totals.length,31);
   assert.equal(totals.reduce((sum,value) => sum + value,0),57);
   assert.ok(totals.includes(0));
-  assert.ok((await page.locator('.daily-table-scroll').boundingBox()).height <= 262);
+  assert.ok((await page.locator('.daily-table-scroll').first().boundingBox()).height <= 262);
   await page.getByText('Consultar datos diarios',{ exact:true }).click();
   await mkdir('.runtime/analysis',{ recursive:true });
   for (const width of [320,390,768,1024,1440]) {
@@ -38,7 +38,7 @@ try {
       }
     }
   }
-  await page.goto('http://localhost:5173/analisis?q=__sin_resultados__');
+  await page.goto((process.env.SMOKE_URL||'http://localhost:5173')+'/analisis?q=__sin_resultados__');
   await page.getByRole('heading',{ name:'Sin muestra para analizar',exact:true }).waitFor();
   assert.equal(await page.locator('.daily-bar').count(),0);
   await page.getByRole('button',{ name:'Restablecer filtros',exact:true }).click();

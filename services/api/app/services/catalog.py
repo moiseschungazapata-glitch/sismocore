@@ -27,7 +27,7 @@ class Catalog:
             offset = 0
             while source_id:
                 page = await database.request('GET', 'eventos_sismicos', params={
-                    'select': 'id,id_externo,magnitud,tipo_magnitud,lugar,profundidad,latitud,longitud,ocurrido_en,url_fuente,estado_revision',
+                    'select': 'id,id_externo,magnitud,tipo_magnitud,lugar,profundidad,latitud,longitud,ocurrido_en,url_fuente,estado_revision,region,recibido_en,hash_origen',
                     'fuente_id': f'eq.{source_id}', 'ocurrido_en': f'gte.{start}', 'order': 'ocurrido_en.desc,id',
                     'limit': '1000', 'offset': str(offset),
                 })
@@ -36,15 +36,24 @@ class Catalog:
                     break
                 offset += 1000
             runs = await database.request('GET', 'ejecuciones_ingesta', params={
-                'select': 'estado,iniciado_en,finalizado_en,registros_recibidos,registros_insertados,registros_actualizados,registros_rechazados,error_resumen',
+                'select': 'estado,iniciado_en,finalizado_en,registros_recibidos,registros_insertados,registros_actualizados,registros_rechazados,registros_sin_cambios,error_resumen',
                 'fuente_id': f'eq.{source_id}', 'order': 'iniciado_en.desc', 'limit': '1',
             }) if source_id else []
             successes = await database.request('GET', 'ejecuciones_ingesta', params={
                 'select': 'finalizado_en', 'estado': 'eq.completada',
                 'fuente_id': f'eq.{source_id}', 'order': 'finalizado_en.desc', 'limit': '1',
             }) if source_id else []
+            pending_alerts = set()
+            delivery_offset = 0
+            while True:
+                deliveries = await database.request('GET', 'entregas_alerta', params={
+                    'select':'id,alerta_id', 'estado':'in.(pendiente,procesando)',
+                    'order':'id', 'limit':'1000', 'offset':str(delivery_offset)})
+                pending_alerts.update(row['alerta_id'] for row in deliveries)
+                if len(deliveries) < 1000: break
+                delivery_offset += 1000
             response = {
-                'total': len(events), 'eventos': events,
+                'total': len(events), 'eventos': events, 'alertas_activas':len(pending_alerts),
                 'fuente': SOURCE_NAME, 'codigo_fuente': SOURCE_CODE, 'url_fuente': IGP_PORTAL,
                 'frecuencia_segundos': settings.SYNC_INTERVAL_SECONDS, 'almacenamiento': 'Supabase',
                 'periodo_dias': settings.CATALOG_DAYS, 'ultima_sincronizacion': successes[0]['finalizado_en'] if successes else None,

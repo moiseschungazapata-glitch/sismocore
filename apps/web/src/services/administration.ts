@@ -33,4 +33,9 @@ export function listAudit(filters: Record<string, string>, signal: AbortSignal) 
 }
 export const authorizeExport = (filters: Filters) => protectedRequest<ExportSnapshot>('reportes/exportar', {
   q: filters.q, magnitud: filters.magnitude, desde: filters.since || null, hasta: filters.until || null,
+  mag_min:filters.minMagnitude ? Number(filters.minMagnitude):null, mag_max:filters.maxMagnitude ? Number(filters.maxMagnitude):null,
+  prof_min:filters.minDepth ? Number(filters.minDepth):null, prof_max:filters.maxDepth ? Number(filters.maxDepth):null,
+  region:filters.region||null, fuente:filters.source||null,
+  lat:filters.latitude ? Number(filters.latitude):null, lon:filters.longitude ? Number(filters.longitude):null,
+  radio:filters.radius ? Number(filters.radius):null, poligono:filters.polygon ? JSON.parse(filters.polygon):null,
 })

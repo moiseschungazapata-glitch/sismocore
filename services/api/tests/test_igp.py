@@ -79,7 +79,7 @@ class IGPTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['periodo_dias'], 30)
         self.assertEqual(result['frecuencia_segundos'], 300)
         for table, params in calls:
-            if table != 'fuentes_datos':
+            if table in ('eventos_sismicos','ejecuciones_ingesta'):
                 self.assertEqual(params['fuente_id'], 'eq.igp-source')
 
     async def test_missing_igp_source_does_not_return_legacy_catalog(self):
@@ -88,4 +88,4 @@ class IGPTests(unittest.IsolatedAsyncioTestCase):
             result = await Catalog().read()
         self.assertEqual(result['total'], 0)
         self.assertIsNone(result['ultima_ejecucion'])
-        self.assertEqual(database.await_count, 1)
+        self.assertEqual(database.await_count, 2)

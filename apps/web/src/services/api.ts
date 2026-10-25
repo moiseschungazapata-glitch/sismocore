@@ -15,6 +15,9 @@ export interface EventoSismico {
   id: string
   id_externo: string
   magnitud: number | null
+  region?: string | null
+  recibido_en?: string
+  hash_origen?: string
   tipo_magnitud: string | null
   lugar: string
   latitud: number
@@ -32,12 +35,14 @@ export interface EjecucionIngesta {
   registros_recibidos: number
   registros_insertados: number
   registros_actualizados: number
+  registros_sin_cambios?: number
   registros_rechazados: number
   error_resumen: string | null
 }
 
 export interface EventosResponse {
   total: number
+  alertas_activas?: number
   eventos: EventoSismico[]
   fuente: string
   almacenamiento: string
@@ -52,7 +57,7 @@ export interface EventosResponse {
   mensaje: string
 }
 
-const CACHE_KEY = 'sismocore.catalogo.igp.v2'
+const CACHE_KEY = 'sismocore.catalogo.igp.v3'
 
 export function recuperarCatalogo(): EventosResponse | null {
   try {

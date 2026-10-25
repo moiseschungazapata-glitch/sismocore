@@ -62,5 +62,8 @@ let cacheGeneration = 0
 export const privateCacheGeneration = () => cacheGeneration
 export function clearPrivateCache() {
   cacheGeneration++
-  try { sessionStorage.removeItem('sismocore.catalogo.igp.v2') } catch { /* Storage may be disabled. */ }
+  try {
+    sessionStorage.removeItem('sismocore.catalogo.igp.v2')
+    sessionStorage.removeItem('sismocore.catalogo.igp.v3')
+  } catch { /* Storage may be disabled. */ }
 }
