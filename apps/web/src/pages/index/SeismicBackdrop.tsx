@@ -1,17 +1,14 @@
-import { useId, useState, type CSSProperties } from 'react'
+import { useId, type CSSProperties } from 'react'
 
 // Decorative illustration: no live events or connection status are represented here.
 const nodes = [[246, 261], [255, 406], [337, 548], [412, 662], [485, 796]]
 
 export default function SeismicBackdrop() {
   const id = useId().replace(/:/g, '')
-  const [paused, setPaused] = useState(false)
-  return <figure className="login-map" data-paused={paused}>
-    <div className="login-map-heading"><span>EXPLORACIÓN SÍSMICA <span aria-hidden="true">/</span> PERÚ</span><button type="button" className="login-map-control" onClick={() => setPaused(value => !value)} aria-label={paused ? 'Reanudar animación del mapa' : 'Pausar animación del mapa'} aria-pressed={paused}>
-      <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">{paused ? <path d="m6 3 10 7-10 7Z" fill="currentColor" /> : <path d="M6 3v14M14 3v14" stroke="currentColor" strokeWidth="3" />}</svg><span>{paused ? 'Reanudar' : 'Pausar'}</span>
-    </button></div>
+  return <figure className="login-map">
+    <div className="login-map-heading"><span>EXPLORACIÓN SÍSMICA <span aria-hidden="true">/</span> PERÚ</span></div>
     <div className="login-map-scene" aria-hidden="true">
-      <svg className="login-map-geography" viewBox="0 0 1122 1402" preserveAspectRatio="xMidYMid slice" focusable="false">
+      <svg className="login-map-geography" viewBox="80 0 1042 1050" preserveAspectRatio="xMidYMid meet" focusable="false">
         <defs>
           <pattern id={`${id}-grid`} width="80" height="80" patternUnits="userSpaceOnUse"><path d="M80 0H0V80" fill="none" stroke="#69dce7" strokeWidth=".6" opacity=".22" /><circle cx="0" cy="0" r="1.6" fill="#9ceff3" opacity=".5" /></pattern>
           <linearGradient id={`${id}-scan`} x1="0" y1="0" x2="0" y2="1"><stop stopColor="#62dce7" stopOpacity="0" /><stop offset="1" stopColor="#62dce7" stopOpacity=".17" /></linearGradient>
