@@ -9,7 +9,7 @@ export function setup() {
     const result = spawnSync(findPython(), ['-m', 'venv', join(api, '.venv')], { cwd: root, stdio: 'inherit', env: runtimeEnv });
     if (result.status !== 0) throw new Error('No se pudo crear el entorno Python.');
   }
-  const check = spawnSync(venvPython, ['-c', 'import fastapi, uvicorn, httpx, dotenv'], { stdio: 'ignore', env: runtimeEnv });
+  const check = spawnSync(venvPython, ['-c', 'import sys; from pathlib import Path; from importlib.metadata import version; expected=[line.strip().split("==") for line in Path(sys.argv[1]).read_text().splitlines() if "==" in line and not line.startswith("#")]; assert all(version(name)==wanted for name,wanted in expected)', join(api, 'requirements.txt')], { stdio: 'ignore', env: runtimeEnv });
   if (check.status !== 0) {
     console.log('Instalando dependencias del backend…');
     const pip = spawnSync(venvPython, ['-m', 'pip', 'install', '-r', join(api, 'requirements.txt')], { stdio: 'inherit', env: runtimeEnv });

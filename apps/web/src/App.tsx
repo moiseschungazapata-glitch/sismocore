@@ -22,6 +22,7 @@ import Users from './pages/administration/Users'
 import Audit from './pages/administration/Audit'
 import { authorizeExport } from './services/administration'
 import Alerts from './pages/alerts/Alerts'
+import Models from './pages/models/Models'
 import { listenForPush } from './services/notifications'
 
 function Monitoring({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<void> }) {
@@ -51,7 +52,7 @@ function Monitoring({ user, onLogout }: { user: AuthUser; onLogout: () => Promis
   const averageDepth = events.length ? `${number(events.reduce((sum, event) => sum + event.profundidad, 0) / events.length)} km` : '—'
   const filterKey = JSON.stringify(filters)
   const allowed = !page || can(user, page.permission)
-  const administrative = page && ['usuarios','auditoria','alertas'].includes(page.id)
+  const administrative = page && ['usuarios','auditoria','alertas','modelos'].includes(page.id)
   const pending = page && 'pending' in page && page.pending
   const showFilters = allowed && page && ['dashboard', 'eventos', 'mapa', 'analisis', 'reportes'].includes(page.id)
   const initialLoading = cargando && !datos
@@ -137,6 +138,7 @@ function Monitoring({ user, onLogout }: { user: AuthUser; onLogout: () => Promis
         : !allowed ? <Panel title="Acceso restringido"><div className="access-denied"><EmptyState icon="lock" title="Tu rol no tiene acceso a este módulo" description="Puedes consultar las áreas habilitadas desde el menú. Si necesitas otro permiso, contacta al administrador." action={<Link className="button button--primary" href="/">Volver al dashboard</Link>} /></div></Panel>
         : page.id === 'usuarios' ? <Users user={user} />
         : page.id === 'auditoria' ? <Audit />
+        : page.id === 'modelos' ? <Models user={user}/>
         : page.id === 'alertas' ? <Alerts userId={user.id} manageRules={can(user,'alertas.administrar')} manageCalls={can(user,'voz.probar')} />
         : pending ? <section className="pending-panel"><div className="pending-illustration"><Icon name={page.icon} size={34} /></div><Badge tone="neutral" icon="clock">{'phase' in page ? page.phase : ''} · En preparación</Badge><h2>{page.title}</h2><p>{page.id === 'modelos' ? 'Aquí se incorporarán los experimentos, entrenamientos y métricas de evaluación. Todavía no hay modelos ni estimaciones implementados.' : page.id === 'alertas' ? 'Este módulo incorporará reglas, aprobaciones y seguimiento de entregas. Actualmente no se están emitiendo alertas.' : 'El acceso ya se valida con Supabase Auth. La administración de usuarios y el historial de auditoría se incorporarán en la siguiente fase.'}</p><div className="pending-actions"><Link className="button button--primary" href={route('/')}>Volver al monitoreo<Icon name="arrow" size={16} /></Link></div><span className="pending-footnote">El catálogo, el mapa y las exportaciones ya están disponibles.</span></section>
           : initialLoading ? <LoadingState />

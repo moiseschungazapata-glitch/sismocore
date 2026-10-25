@@ -44,7 +44,7 @@ class RecoverySession(BaseModel):
 attempts = defaultdict(deque)
 
 
-def guard(request: Request, kind: Literal['login', 'recover', 'session', 'password', 'logout', 'admin', 'export', 'push', 'voice', 'sms']):
+def guard(request: Request, kind: Literal['login', 'recover', 'session', 'password', 'logout', 'admin', 'export', 'push', 'voice', 'sms', 'ml']):
     origin = request.headers.get('origin', '')
     if origin not in settings.CORS_ORIGINS:
         raise HTTPException(403, 'La solicitud no proviene de una dirección autorizada.')

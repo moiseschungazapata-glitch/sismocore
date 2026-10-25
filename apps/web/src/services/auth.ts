@@ -30,14 +30,14 @@ export async function authRequest<T>(path: string, body?: object): Promise<T> {
   return data as T
 }
 
-export async function protectedRequest<T>(path: string, body?: object, method?: 'POST' | 'PATCH', signal?: AbortSignal): Promise<T> {
+export async function protectedRequest<T>(path: string, body?: object, method?: 'POST' | 'PATCH', signal?: AbortSignal, timeoutMs = 25000): Promise<T> {
   let response: Response
   try {
     response = await fetch(`${base}/api/v1/${path}`, {
       method: method || (body === undefined ? 'GET' : 'POST'), credentials: 'include',
       headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(25000)]) : AbortSignal.timeout(25000),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
     })
   } catch (error) {
     if (signal?.aborted) throw error
