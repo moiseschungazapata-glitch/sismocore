@@ -12,7 +12,34 @@
 .login-intro { margin-top: 62px; position: relative; z-index: 1; }
 .login-intro h2 { font-size: clamp(32px, 3.2vw, 49px); line-height: 1.16; font-weight: 760; letter-spacing: -.8px; }
 .login-intro p { font-size: clamp(17px, 1.7vw, 23px); color: var(--muted); margin-top: 16px; }
-.login-map { flex: 1; min-height: 270px; margin: -25px -40px -20px; background: url('/images/login-map.png') center center / cover no-repeat; mask-image: linear-gradient(transparent 0%, black 15%, black 85%, transparent 100%); opacity: .85; z-index: -1; }
+.login-map { flex: 1; min-height: 300px; min-width: 0; display: flex; flex-direction: column; margin: 25px 0 0; position: relative; }
+.login-map-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: #97bbc9; font-size: 9px; letter-spacing: 1.8px; margin-bottom: 10px; }
+.login-map-heading > span > span { color: #4fb3c3; padding-inline: 7px; }
+.login-map-control { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid #305364; border-radius: 6px; background: #102331; color: #b9dce4; font: inherit; letter-spacing: .3px; cursor: pointer; }
+.login-map-control:hover { color: #e4fcff; border-color: #6edbe6; }
+.login-map-scene { flex: 1; min-height: 270px; position: relative; isolation: isolate; overflow: hidden; border: 1px solid #27506370; border-radius: 14px; background: #091827; }
+.login-map-geography { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .94; }
+.login-map-scene::after { content: ''; position: absolute; inset: 0; background: linear-gradient(0deg,#091827 0%,transparent 32%,transparent 85%,#09182755); pointer-events: none; }
+.login-map-scan { animation: seismic-scan 11s linear infinite; }
+.login-map-link { animation: seismic-link 14s linear infinite; opacity: .65; }
+.login-map-wave { fill: none; stroke: #77e7f0; stroke-width: 1.4; transform-box: fill-box; transform-origin: center; animation: seismic-wave 5.8s ease-out infinite; animation-delay: var(--node-delay); }
+.login-map-wave--inner { animation-name: seismic-wave-inner; }
+.login-map-target circle { transform-origin: center; transform-box: fill-box; animation: seismic-orbit 32s linear infinite; }
+.login-map-corner { position: absolute; width: 18px; height: 18px; border-color: #6dd9e7; border-style: solid; z-index: 2; opacity: .65; }
+.login-map-corner--tl { top: 11px; left: 11px; border-width: 1px 0 0 1px; }.login-map-corner--tr { top: 11px; right: 11px; border-width: 1px 1px 0 0; }.login-map-corner--bl { bottom: 11px; left: 11px; border-width: 0 0 1px 1px; }.login-map-corner--br { bottom: 11px; right: 11px; border-width: 0 1px 1px 0; }
+.login-map-signal { position: absolute; z-index: 2; left: 26px; right: 26px; bottom: 22px; padding: 10px 12px 3px; background: #091a28cc; border: 1px solid #2e5366; border-radius: 7px; }
+.login-map-signal > div { display: flex; justify-content: space-between; font: 8px ui-monospace,monospace; letter-spacing: 1.8px; color: #b0d5df; }.login-map-signal > div span+span { color: #8cb9c7; }
+.login-map-signal > svg { display: block; height: 35px; width: 100%; margin-top: 3px; }
+.login-map-trace { animation: seismic-trace 6s linear infinite; }
+.login-map figcaption { font-size: 10px; line-height: 1.6; color: #9bb5c7; margin-top: 10px; letter-spacing: .2px; }.login-map figcaption span { padding-inline: 4px; }
+.login-map[data-paused=true] * { animation-play-state: paused !important; }
+@keyframes seismic-wave { 0% { transform: scale(.5); opacity: .8; } 85%,100% { transform: scale(5.5); opacity: 0; } }
+@keyframes seismic-wave-inner { 0%,18% { transform: scale(.5); opacity: 0; } 20% { opacity: .65; } 100% { transform: scale(4.5); opacity: 0; } }
+@keyframes seismic-scan { from { transform: translateY(0); } to { transform: translateY(1552px); } }
+@keyframes seismic-link { to { stroke-dashoffset: -140; } }
+@keyframes seismic-trace { from { stroke-dashoffset: 10; } to { stroke-dashoffset: -90; } }
+@keyframes seismic-orbit { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .login-map * { animation: none !important; }.login-map-wave { opacity: .3; }.login-map-scan { display: none; }.login-map-control { display: none; } }
 .login-story-note { display: flex; align-items: center; gap: 18px; color: var(--muted); letter-spacing: .7px; font-size: 12px; padding-top: 16px; }
 .login-story-note > span { width: 40px; height: 1px; background: var(--subtle); flex-shrink: 0; }
 .login-form-area { display: flex; flex-direction: column; justify-content: center; align-items: center; min-width: 0; padding-block: 25px; }
@@ -62,7 +89,14 @@
 @media (max-width: 767px) {
   .login-page { display: flex; flex-direction: column; gap: 30px; padding: 32px 22px; justify-content: center; }
   .login-story { align-items: center; }
-  .login-intro, .login-map, .login-story-note { display: none; }
+  .login-intro, .login-story-note { display: none; }
+  .login-story { align-items: stretch; gap: 20px; }
+  .login-brand { justify-content: center; }
+  .login-map { flex: none; min-height: 0; margin: 0; }
+  .login-map-heading { font-size: 8px; letter-spacing: 1px; }
+  .login-map-scene { flex: none; height: 155px; min-height: 0; }
+  .login-map-signal { bottom: 16px; left: 20px; right: 20px; padding-top: 6px; }.login-map-signal > svg { height: 24px; }
+  .login-map figcaption { font-size: 9px; text-align: center; }
   .login-form-area { padding: 0; }
   .login-card { padding: 30px 24px; }
   .login-card form { margin-top: 30px; }
