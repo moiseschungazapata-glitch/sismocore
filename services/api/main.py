@@ -21,6 +21,7 @@ from app.api.routes.notifications import router as notifications_router
 from app.api.routes.alerts import router as alerts_router
 from app.api.routes.voice import router as voice_router
 from app.api.routes.sms import router as sms_router
+from app.api.routes.internal import router as internal_router
 
 
 @asynccontextmanager
@@ -80,6 +81,7 @@ app.include_router(notifications_router, prefix=settings.API_PREFIX)
 app.include_router(alerts_router, prefix=settings.API_PREFIX)
 app.include_router(voice_router, prefix=settings.API_PREFIX)
 app.include_router(sms_router, prefix=settings.API_PREFIX)
+app.include_router(internal_router, prefix=settings.API_PREFIX)
 
 
 @app.get('/')

@@ -8,14 +8,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'services' / 'api'))
 from app.core.config import settings
 from app.services.database import database
-from app.services.ingestion import Ingestion
-from app.services.alerts import process_alerts
+from app.services.scheduled import synchronize
 from app.services.igp import IGP_URL, normalize, query_params
 from datetime import datetime, timezone
 import httpx
 
 
-async def main(check_only):
+async def main(check_only, backup=False):
     if check_only:
         # Public source verification only: never opens Supabase or modifies data.
         async with httpx.AsyncClient(timeout=30) as client:
@@ -40,12 +39,12 @@ async def main(check_only):
         raise RuntimeError('Configura SUPABASE_URL y SUPABASE_SECRET_KEY.')
     await database.open()
     try:
-        worker = Ingestion()
-        await worker.sync()
-        print('Resultado de sincronización IGP:', worker.state)
-        if worker.state not in ('actualizada', 'otra_ejecucion'):
-            raise RuntimeError('La sincronización no terminó correctamente. Consulta Fuentes de datos.')
-        print('Resultado de avisos:',await process_alerts())
+        if backup:
+            scheduler = await database.request('POST','rpc/sismocore_estado_sincronizacion',data={})
+            if scheduler.get('activo') is True:
+                print('Supabase Cron está activo; se omite la programación de respaldo de GitHub.')
+                return
+        print('Resultado de sincronización IGP:', await synchronize())
     finally:
         await database.close()
 
@@ -53,9 +52,10 @@ async def main(check_only):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--check-only', action='store_true')
+    parser.add_argument('--respaldo', action='store_true')
     args = parser.parse_args()
     try:
-        asyncio.run(main(args.check_only))
+        asyncio.run(main(args.check_only,args.respaldo))
     except Exception as exc:
         # Never print upstream request headers, configuration values or traceback.
         print(str(exc) if isinstance(exc, RuntimeError) else 'No se pudo completar la sincronización.', file=sys.stderr)

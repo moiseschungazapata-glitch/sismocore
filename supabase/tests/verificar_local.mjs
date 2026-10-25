@@ -57,6 +57,12 @@ try {
   console.log('Consentimiento, interruptor, canales, cuota compartida y deduplicacion de llamadas comprobados.');
   console.log('Limites atomicos y privacidad de pruebas de voz comprobados.');
   console.log('Reglas, zonas, reservas, revocacion y deduplicacion de avisos comprobados.');
+  await db.exec(await readFile(new URL('../migrations/20261025000100_reserva_sincronizacion.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('./cron_platform_simulada.sql',import.meta.url),'utf8'));
+  const cronMigration=(await readFile(new URL('../migrations/20261025000200_programacion_supabase.sql',import.meta.url),'utf8')).replace(/^create extension .*;$/gm,'');
+  await db.exec(cronMigration);
+  await db.exec(await readFile(new URL('./sincronizacion_cron.sql',import.meta.url),'utf8'));
+  console.log('Cron: instalacion pausada, reservas exclusivas, recuperacion de caidas y privacidad comprobadas con plataforma simulada.');
   const tables = await db.query("select count(*)::int as total from pg_tables where schemaname='public'");
   if (tables.rows[0].total !== 13) throw new Error('Cantidad de tablas inesperada');
   const leaked = await db.query("select count(*)::int as total from auth.users");

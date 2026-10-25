@@ -12,6 +12,7 @@ class Settings:
     APP_VERSION = '0.2.0'
     API_PREFIX = '/api/v1'
     DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
+    SYNC_CRON_SECRET = os.getenv('SYNC_CRON_SECRET', '')
     SUPABASE_URL = os.getenv('SUPABASE_URL', '').rstrip('/')
     SUPABASE_SECRET_KEY = os.getenv('SUPABASE_SECRET_KEY', '')
     SYNC_INTERVAL_SECONDS = max(300, int(os.getenv('SYNC_INTERVAL_SECONDS', '300')))

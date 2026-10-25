@@ -37,4 +37,9 @@ jobs:
       - name: Instalar dependencias
         run: python -m pip install -r services/api/requirements.txt
       - name: Actualizar catálogo
-        run: python scripts/sync-catalog.py
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            python scripts/sync-catalog.py --respaldo
+          else
+            python scripts/sync-catalog.py
+          fi
