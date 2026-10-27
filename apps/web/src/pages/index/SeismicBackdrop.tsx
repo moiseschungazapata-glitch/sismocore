@@ -8,7 +8,7 @@ export default function SeismicBackdrop() {
   return <figure className="login-map">
     <div className="login-map-heading"><span>EXPLORACIÓN SÍSMICA <span aria-hidden="true">/</span> PERÚ</span></div>
     <div className="login-map-scene" aria-hidden="true">
-      <svg className="login-map-geography" viewBox="80 0 1042 1050" preserveAspectRatio="xMidYMid meet" focusable="false">
+      <svg className="login-map-geography" viewBox="150 130 800 820" preserveAspectRatio="xMidYMid meet" focusable="false">
         <defs>
           <pattern id={`${id}-grid`} width="80" height="80" patternUnits="userSpaceOnUse"><path d="M80 0H0V80" fill="none" stroke="#69dce7" strokeWidth=".6" opacity=".22" /><circle cx="0" cy="0" r="1.6" fill="#9ceff3" opacity=".5" /></pattern>
           <linearGradient id={`${id}-scan`} x1="0" y1="0" x2="0" y2="1"><stop stopColor="#62dce7" stopOpacity="0" /><stop offset="1" stopColor="#62dce7" stopOpacity=".17" /></linearGradient>
