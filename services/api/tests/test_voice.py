@@ -1,4 +1,5 @@
 import sys
+import asyncio
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, PropertyMock, patch
@@ -35,7 +36,7 @@ class VoiceApiTests(unittest.IsolatedAsyncioTestCase):
             if self.error and table.startswith('rpc/'): raise self.error
             if table=='eventos_sismicos':return [self.event] if self.event else []
             if table.endswith('sismocore_limites_voz') or table.endswith('sismocore_reservar_prueba_voz'):
-                return {'usadas_hoy':1,'usadas_total':1,'limite_diario':5,'limite_total':50,'espera_segundos':60}
+                return {'usadas_hoy':1,'usadas_total':1,'limite_diario':10,'limite_total':50,'espera_segundos':60}
             if table=='auditoria':
                 if kwargs['params']['accion']=='eq.voz.solicitar': return [{'id':REF,'ocurrido_en':'2026-10-24T12:00:00Z','despues':{'ultimos':'0000'}}]
                 return [{'entidad_id':REF,'despues':{'estado':'queued','proveedor_id':SID}}]
@@ -115,6 +116,66 @@ class VoiceApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code,503)
         self.assertEqual(self.calls[-1][1]['data']['p_estado'],'desconocida')
         self.mocks[3].assert_awaited_once()
+
+    def group_body(self):
+        event=context(EVENT)
+        return {'destinos_ids':[DEST,'b'*64],'confirmado':True,'evento_id':event['id'],'evento_huella':event['huella']}
+
+    async def test_group_reserves_atomically_then_dispatches_in_parallel(self):
+        self.mocks[2].return_value={DEST:PHONE,'b'*64:'+51911111111'}
+        started=[];both=asyncio.Event()
+        async def call(phone,event):
+            self.assertTrue(any(table=='rpc/sismocore_reservar_grupo_voz' for table,_ in self.calls))
+            started.append(phone)
+            if len(started)==2:both.set()
+            await asyncio.wait_for(both.wait(),1)
+            return {'sid':SID,'estado':'queued'}
+        self.mocks[3].side_effect=call
+        response=await self.client.post('/api/v1/voz/pruebas/grupo',headers=ORIGIN,json=self.group_body())
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(len(started),2)
+        self.assertTrue(all(row['aceptada'] for row in response.json()['resultados']))
+        self.assertNotIn(PHONE,response.text);self.assertNotIn(SID,response.text)
+        claims=next(kwargs['data'] for table,kwargs in self.calls if table=='rpc/sismocore_reservar_grupo_voz')
+        self.assertEqual(claims['p_actor'],ACTOR)
+        self.assertEqual(len({row['referencia'] for row in claims['p_destinos']}),2)
+
+    async def test_group_limits_block_both_calls(self):
+        self.mocks[2].return_value={DEST:PHONE,'b'*64:'+51911111111'}
+        for code,status in [('PT429',429),('PT409',409)]:
+            self.error=DatabaseError(code=code)
+            response=await self.client.post('/api/v1/voz/pruebas/grupo',headers=ORIGIN,json=self.group_body())
+            self.assertEqual(response.status_code,status)
+        self.mocks[3].assert_not_awaited()
+
+    async def test_group_rejects_invalid_destinations_preview_and_origin(self):
+        body=self.group_body()
+        for targets in [[],[DEST],[DEST,DEST],[DEST,'b'*64,'c'*64]]:
+            response=await self.client.post('/api/v1/voz/pruebas/grupo',headers=ORIGIN,json={**body,'destinos_ids':targets})
+            self.assertEqual(response.status_code,422)
+        response=await self.client.post('/api/v1/voz/pruebas/grupo',headers=ORIGIN,json=body)
+        self.assertEqual(response.status_code,422)
+        self.mocks[2].return_value={DEST:PHONE,'b'*64:'+51911111111'}
+        self.event={**EVENT,'magnitud':5}
+        response=await self.client.post('/api/v1/voz/pruebas/grupo',headers=ORIGIN,json=body)
+        self.assertEqual(response.status_code,409)
+        response=await self.client.post('/api/v1/voz/pruebas/grupo',headers={'Origin':'https://evil.invalid'},json=body)
+        self.assertEqual(response.status_code,403)
+        self.mocks[3].assert_not_awaited()
+        self.assertFalse(any(table=='rpc/sismocore_reservar_grupo_voz' for table,_ in self.calls))
+
+    async def test_group_partial_failure_records_both_without_retry(self):
+        self.mocks[2].return_value={DEST:PHONE,'b'*64:'+51911111111'}
+        async def call(phone,event):
+            if phone==PHONE:raise VoiceError('CONEXION')
+            return {'sid':SID,'estado':'queued'}
+        self.mocks[3].side_effect=call
+        response=await self.client.post('/api/v1/voz/pruebas/grupo',headers=ORIGIN,json=self.group_body())
+        self.assertEqual(response.status_code,200)
+        self.assertEqual([row['aceptada'] for row in response.json()['resultados']],[False,True])
+        self.assertEqual(self.mocks[3].await_count,2)
+        states=[kw['data']['p_estado'] for table,kw in self.calls if table=='rpc/sismocore_registrar_estado_voz']
+        self.assertCountEqual(states,['desconocida','queued'])
 
     async def test_preview_and_changed_or_missing_event_do_not_consume_quota(self):
         response=await self.client.get('/api/v1/voz/pruebas')

@@ -67,6 +67,9 @@ try {
   await db.exec(await readFile(new URL('../migrations/20261025000400_ajuste_clasificacion_ml.sql',import.meta.url),'utf8'));
   await db.exec(await readFile(new URL('./laboratorio_ml.sql',import.meta.url),'utf8'));
   console.log('ML: permisos, publicación, versiones, reserva exclusiva, finalización, aprobación e inmutabilidad comprobados.');
+  await db.exec(await readFile(new URL('../migrations/20261029000100_pruebas_voz_grupo.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('./pruebas_voz_grupo.sql',import.meta.url),'utf8'));
+  console.log('Voz: diez intentos diarios permanentes, reserva atomica de dos, espera compartida y limite total comprobados.');
   const tables = await db.query("select count(*)::int as total from pg_tables where schemaname='public'");
   if (tables.rows[0].total !== 13) throw new Error('Cantidad de tablas inesperada');
   const leaked = await db.query("select count(*)::int as total from auth.users");

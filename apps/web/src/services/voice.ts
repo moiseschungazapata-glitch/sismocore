@@ -5,6 +5,7 @@ export type VoiceTrial={configurada:boolean;automaticas:false;ultimo_evento:Voic
   historial:{id:string;fecha:string;ultimos:string;estado:string}[]}
 export const loadVoiceTrial=(signal?:AbortSignal)=>protectedRequest<VoiceTrial>('voz/pruebas',undefined,undefined,signal)
 export const startVoiceTrial=(destino_id:string,event:VoiceEvent)=>protectedRequest<{id:string;estado:string;message:string}>('voz/pruebas',{destino_id,confirmado:true,evento_id:event.id,evento_huella:event.huella})
+export const startVoiceGroup=(destinos_ids:string[],event:VoiceEvent)=>protectedRequest<{message:string;resultados:{id:string;ultimos:string;estado:string;aceptada:boolean;error?:string}[]}>('voz/pruebas/grupo',{destinos_ids,confirmado:true,evento_id:event.id,evento_huella:event.huella})
 export const refreshVoiceTrial=(id:string)=>protectedRequest<{estado:string}>(`voz/pruebas/${id}/actualizar`,{})
 export type AutomaticVoiceSettings={configurada:boolean;habilitadas:boolean;cuenta_coincide:boolean;telefono:{activo:boolean;ultimos:string|null;autorizado_en:string|null}}
 export const loadAutomaticVoice=()=>protectedRequest<AutomaticVoiceSettings>('voz/automaticas')

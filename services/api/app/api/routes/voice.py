@@ -1,5 +1,6 @@
-from uuid import UUID
-from typing import Literal
+from uuid import UUID, uuid4
+from typing import Annotated, Literal
+import asyncio
 from fastapi import APIRouter, Response, Depends, Request, HTTPException, Query
 import hmac
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -70,6 +71,19 @@ class ManualCallRequest(CallRequest):
     @model_validator(mode='after')
     def complete_preview(self):
         if (self.evento_id is None)!=(self.evento_huella is None): raise ValueError('Vista previa incompleta')
+        return self
+
+
+class BatchCallRequest(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    destinos_ids:list[Annotated[str,Field(pattern=r'^[a-f0-9]{64}$')]]=Field(min_length=2,max_length=2)
+    confirmado:Literal[True]
+    evento_id:UUID
+    evento_huella:str=Field(pattern=r'^[a-f0-9]{64}$')
+
+    @model_validator(mode='after')
+    def unique_targets(self):
+        if len(set(self.destinos_ids))!=len(self.destinos_ids): raise ValueError('Destinos repetidos')
         return self
 
 
@@ -145,6 +159,10 @@ async def create_test(body:ManualCallRequest,request:Request,user=Depends(admin)
     reference=request.state.correlation_id
     await voice_rpc('sismocore_reservar_prueba_voz',{'p_actor':user['id'],'p_cuenta':voice_provider.account_hash,
         'p_destino':body.destino_id,'p_ultimos':phone[-4:],'p_referencia':reference})
+    return await dispatch_manual_call(phone,event,reference,user)
+
+
+async def dispatch_manual_call(phone,event,reference,user):
     error=None;result=None
     try: result=await voice_provider.call_snapshot(phone,event)
     except VoiceError as failure: error=failure
@@ -157,6 +175,30 @@ async def create_test(body:ManualCallRequest,request:Request,user=Depends(admin)
         raise HTTPException(503,'La solicitud se procesó pero no se pudo guardar su resultado. Consulta Twilio antes de repetirla.') from failure
     if error: raise provider_error(error) from error
     return {'id':reference,'estado':state,'message':'Twilio aceptó la solicitud. Comprueba si recibes la llamada y actualiza su estado; esto no confirma que hayas contestado.'}
+
+
+@router.post('/pruebas/grupo')
+async def create_batch(body:BatchCallRequest,request:Request,user=Depends(admin)):
+    guard(request,'voice')
+    try: numbers=await voice_provider.recipients()
+    except VoiceError as failure: raise provider_error(failure) from failure
+    if any(target not in numbers for target in body.destinos_ids):
+        raise HTTPException(422,'Selecciona dos destinos verificados disponibles y actualiza la lista si fuera necesario.')
+    event=await latest_event()
+    if not event or str(body.evento_id)!=event['id'] or body.evento_huella!=event['huella']:
+        raise HTTPException(409,'El último evento cambió o ya no está disponible. Actualiza y confirma de nuevo; no se realizó ninguna llamada.')
+    claims=[{'destino':target,'ultimos':numbers[target][-4:],'referencia':str(uuid4())} for target in body.destinos_ids]
+    # Reserve both attempts in one transaction before contacting the provider.
+    await voice_rpc('sismocore_reservar_grupo_voz',{'p_actor':user['id'],'p_cuenta':voice_provider.account_hash,'p_destinos':claims})
+    async def dispatch(claim):
+        try:
+            result=await dispatch_manual_call(numbers[claim['destino']],event,claim['referencia'],user)
+            return {'id':result['id'],'ultimos':claim['ultimos'],'estado':result['estado'],'aceptada':True}
+        except HTTPException as failure:
+            return {'id':claim['referencia'],'ultimos':claim['ultimos'],'estado':'sin_confirmacion','aceptada':False,'error':failure.detail}
+    results=await asyncio.gather(*(dispatch(claim) for claim in claims))
+    accepted=sum(row['aceptada'] for row in results)
+    return {'resultados':results,'message':f'Twilio aceptó {accepted} de 2 solicitudes. Cada llamada consume un intento. Consulta el resultado de cada teléfono antes de repetir.'}
 
 
 @router.post('/pruebas/{reference}/actualizar')
