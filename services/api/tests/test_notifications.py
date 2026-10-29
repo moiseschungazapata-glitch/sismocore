@@ -161,6 +161,51 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.calls[-1][2]['data']['p_error_codigo'],'UNREGISTERED')
         self.assertFalse(self.calls[-1][2]['data']['p_aceptada'])
 
+    async def test_latest_alert_contains_observed_event_and_is_scoped_to_user(self):
+        event={'magnitud':4.6,'profundidad':26,'lugar':'Nasca - Ica','ocurrido_en':'2026-10-29T12:04:03Z'}
+        original=self.db_patch.target.request.side_effect
+        async def database(method,table,**kw):
+            if table=='entregas_alerta':
+                self.assertEqual(kw['params']['usuario_id'],'eq.'+USER)
+                self.assertEqual(kw['params']['canal'],'eq.push')
+                self.assertEqual(kw['params']['order'],'creado_en.desc,id.desc')
+                return [{'alerta':{'titulo':'Original','mensaje':'Original','evento':event}}]
+            return await original(method,table,**kw)
+        with patch('app.services.database.database.request',new=AsyncMock(side_effect=database)),patch.object(push_sender,'send',new=AsyncMock(return_value='projects/test/messages/2')) as send:
+            response=await self.client.post(f'/api/v1/notificaciones/dispositivos/{DEVICE}/ultima-alerta',headers=ORIGIN,json={})
+        self.assertEqual(response.status_code,200)
+        self.assertIn('reenvío',response.json()['message'])
+        self.assertNotIn(TOKEN,response.text)
+        args=send.await_args.args
+        self.assertEqual(args[0],TOKEN)
+        self.assertIn('Reenvío',args[3]);self.assertIn('M4.6',args[3])
+        for text in ['Nasca - Ica','26 km','29/10/2026 07:04','no es una alerta nueva']:
+            self.assertIn(text,args[4])
+        self.assertEqual(args[5],'reenvio')
+        self.assertTrue(self.calls[-1][2]['data']['p_aceptada'])
+        self.send.assert_not_awaited()
+
+    async def test_latest_alert_empty_history_does_not_reserve_or_send(self):
+        with patch('app.services.database.database.request',new=AsyncMock(return_value=[])),patch.object(push_sender,'send',new=AsyncMock()) as send:
+            response=await self.client.post(f'/api/v1/notificaciones/dispositivos/{DEVICE}/ultima-alerta',headers=ORIGIN,json={})
+        self.assertEqual(response.status_code,404)
+        self.assertFalse(self.calls)
+        send.assert_not_awaited()
+
+    async def test_latest_alert_reuses_device_ownership_and_cooldown_checks(self):
+        for code,status in [('PT404',404),('PT429',429)]:
+            with patch('app.services.database.database.request',new=AsyncMock(side_effect=[
+                [{'alerta':{'titulo':'Aviso','mensaje':'Evento observado','evento':None}}],DatabaseError(code=code)
+            ])),patch.object(push_sender,'send',new=AsyncMock()) as send:
+                response=await self.client.post(f'/api/v1/notificaciones/dispositivos/{DEVICE}/ultima-alerta',headers=ORIGIN,json={})
+            self.assertEqual(response.status_code,status)
+            send.assert_not_awaited()
+
+    async def test_latest_alert_rejects_cross_origin_before_database(self):
+        response=await self.client.post(f'/api/v1/notificaciones/dispositivos/{DEVICE}/ultima-alerta',headers={'Origin':'https://other.invalid'},json={})
+        self.assertEqual(response.status_code,403)
+        self.assertFalse(self.calls)
+
     async def test_logout_revokes_device_with_server_verified_identity(self):
         async def upstream(method,path,**kwargs):
             return httpx.Response(200,json={'id':USER})

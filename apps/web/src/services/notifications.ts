@@ -82,6 +82,7 @@ export async function deactivatePush(id:string,userId:string) {
   }
 }
 export const sendPushTest = (id:string) => protectedRequest<{ message:string; estado:'aceptada' }>(`notificaciones/dispositivos/${id}/prueba`,{})
+export const sendLatestAlert = (id:string) => protectedRequest<{ message:string; estado:'aceptada' }>(`notificaciones/dispositivos/${id}/ultima-alerta`,{})
 
 export async function listenForPush(userId:string) {
   if (pushSupport() || Notification.permission !== 'granted' || !currentPushDevice(userId)) return () => {}

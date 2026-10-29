@@ -1,4 +1,5 @@
 from uuid import UUID
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 import json
 
@@ -34,7 +35,7 @@ async def rpc(name, data):
     except DatabaseError as exc:
         messages = {'PT403':(403,'Tu cuenta no está activa.'),'PT404':(404,'Este dispositivo ya no está registrado. Activa las notificaciones de nuevo.'),
                     'PT409':(409,'Alcanzaste el máximo de diez dispositivos activos.'),'PT422':(422,'Revisa los datos del dispositivo.'),
-                    'PT429':(429,'Espera un minuto antes de enviar otra prueba.')}
+                    'PT429':(429,'Espera un minuto antes de enviar otra notificación manual.')}
         if exc.code=='PT409' and name in ('sismocore_guardar_regla_push','sismocore_guardar_regla_alerta'):
             raise HTTPException(409,'No se pudo guardar la regla. Actualiza la lista y revisa que la fuente IGP esté activa; se permiten hasta veinte reglas.') from exc
         if exc.code=='PT422' and name in ('sismocore_guardar_regla_push','sismocore_guardar_regla_alerta'):
@@ -95,15 +96,45 @@ async def deactivate(device_id: UUID, request: Request, user=Depends(own_notific
 
 @router.post('/dispositivos/{device_id}/prueba')
 async def test(device_id: UUID, request: Request, user=Depends(own_notifications)):
+    return await send_manual(device_id,request,user)
+
+
+@router.post('/dispositivos/{device_id}/ultima-alerta')
+async def resend_latest(device_id: UUID, request: Request, user=Depends(own_notifications)):
+    return await send_manual(device_id,request,user,latest=True)
+
+
+async def send_manual(device_id,request,user,latest=False):
     guard(request,'push')
     if not push_sender.configured:
         raise HTTPException(503,'Falta configurar la credencial privada de Firebase en el servidor. Aún no se pueden enviar pruebas.')
+    title = body = None
+    if latest:
+        rows = await database.request('GET','entregas_alerta',params={
+            'select':'alerta:alertas!inner(titulo,mensaje,evento:eventos_sismicos(magnitud,profundidad,lugar,ocurrido_en))',
+            'usuario_id':f'eq.{user["id"]}','canal':'eq.push','order':'creado_en.desc,id.desc','limit':'1'})
+        if not rows:
+            raise HTTPException(404,'Aún no tienes alertas de notificación en tu historial para reenviar.')
+        alert = rows[0]['alerta']
+        event = alert.get('evento')
+        if event:
+            occurred = datetime.fromisoformat(event['ocurrido_en'].replace('Z','+00:00'))
+            local = occurred.astimezone(timezone(timedelta(hours=-5))).strftime('%d/%m/%Y %H:%M')
+            title = f'SISMOCORE · Reenvío · Sismo M{event["magnitud"]}'
+            depth = f'{event["profundidad"]} km' if event.get('profundidad') is not None else 'sin dato'
+            body = f'{event["lugar"][:200]} · Profundidad: {depth}. {local} (Perú). Reenvío de un evento ya reportado por el IGP; no es una alerta nueva.'
+        else:
+            title = ('SISMOCORE · Reenvío · ' + alert['titulo'])[:120]
+            body = ('Reenvío; no es una alerta nueva. ' + alert['mensaje'])[:500]
     claimed = await rpc('sismocore_preparar_prueba_push',{'p_usuario_id':user['id'],
         'p_dispositivo_id':str(device_id),'p_correlacion_id':request.state.correlation_id})
     error = None
     message_id = None
     try:
-        message_id = await push_sender.test(claimed['token'],request.state.correlation_id,request.headers['origin'])
+        if latest:
+            message_id = await push_sender.send(claimed['token'],request.state.correlation_id,request.headers['origin'],title,body,'reenvio')
+        else:
+            message_id = await push_sender.test(claimed['token'],request.state.correlation_id,request.headers['origin'])
     except PushError as failure:
         error = failure.code
     try:
@@ -116,5 +147,6 @@ async def test(device_id: UUID, request: Request, user=Depends(own_notifications
                     'AUTHENTICATION_ERROR':'Revisa la credencial privada de Firebase en el servidor.',
                     'PERMISSION_DENIED':'Firebase rechazó el envío. Revisa el proyecto, la API FCM y los permisos de la cuenta de servicio.'}
         raise HTTPException(503,messages.get(error,'No se pudo confirmar el envío. Espera un minuto antes de volver a probar.'))
-    return {'message':'Firebase aceptó la notificación de prueba. Comprueba su recepción en el dispositivo seleccionado.',
+    return {'message':('Firebase aceptó el reenvío de tu última alerta. Comprueba su recepción en el dispositivo seleccionado.' if latest else
+                       'Firebase aceptó la notificación de prueba. Comprueba su recepción en el dispositivo seleccionado.'),
             'estado':'aceptada','correlacion_id':request.state.correlation_id}

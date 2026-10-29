@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Badge, Button, ConfirmDialog, Panel } from '../../components/ui'
 import { fecha } from '../../lib/format'
-import { currentPushDevice, deactivatePush, enablePush, notificationStatus, pushSupport, sendPushTest, type PushDevice, type PushStatus } from '../../services/notifications'
+import { currentPushDevice, deactivatePush, enablePush, notificationStatus, pushSupport, sendLatestAlert, sendPushTest, type PushDevice, type PushStatus } from '../../services/notifications'
 import './alerts.css'
 import { Rules, AlertHistory } from './Rules'
 import VoiceTrial from './VoiceTrial'
@@ -19,7 +19,7 @@ export default function Alerts({ userId,manageRules=false,manageCalls=false }: {
   const [busy,setBusy] = useState(false)
   const [revision,setRevision] = useState(0)
   const [permission,setPermission] = useState('Notification' in window ? Notification.permission : 'denied')
-  const [confirmation,setConfirmation] = useState<{ device:PushDevice; test:boolean } | null>(null)
+  const [confirmation,setConfirmation] = useState<{ device:PushDevice; action:'test' | 'latest' | 'deactivate' } | null>(null)
   const unsupported = pushSupport()
   const current = currentPushDevice(userId)
   useEffect(() => {
@@ -48,7 +48,8 @@ export default function Alerts({ userId,manageRules=false,manageCalls=false }: {
     if (!confirmation || busy) return
     setBusy(true); setError(''); setMessage('')
     try {
-      if (confirmation.test) setMessage((await sendPushTest(confirmation.device.id)).message)
+      if (confirmation.action === 'test') setMessage((await sendPushTest(confirmation.device.id)).message)
+      else if (confirmation.action === 'latest') setMessage((await sendLatestAlert(confirmation.device.id)).message)
       else {
         await deactivatePush(confirmation.device.id,userId)
         setMessage('Dispositivo desactivado para tu cuenta.')
@@ -85,14 +86,14 @@ export default function Alerts({ userId,manageRules=false,manageCalls=false }: {
           {status&&!status.configurada&&<p className="information-note"><strong>Envío pendiente de configuración.</strong> Las pruebas se habilitarán al configurar Firebase en el servidor.</p>}
           {error&&<p className="inline-error" role="alert">{error}</p>}{message&&<p className="export-success" role="status">{message}</p>}
           {!status?<p role="status">Consultando dispositivos…</p>:!status.dispositivos.length?<div className="alerts-empty"><Icon name="alert" size={24}/><p>Aún no tienes dispositivos activados.</p><span>Activa este navegador para comenzar.</span></div>:<ul className="push-devices">{status.dispositivos.map(device=><li key={device.id}>
-            <div className="push-device-details"><h3>{device.etiqueta} {device.id===current&&<Badge tone="info">Este navegador</Badge>}</h3><p>{device.ultima_prueba_en?`Última prueba: ${fecha(device.ultima_prueba_en)} · ${device.ultima_prueba_estado==='aceptada'?'Aceptada':device.ultima_prueba_estado==='fallida'?'Sin confirmación':'En proceso'}`:`Registrado: ${fecha(device.registrado_en)}`}</p></div>
-            <div className="push-actions"><Button disabled={busy||!status.configurada||(device.id===current&&permission!=='granted')} onClick={()=>setConfirmation({device,test:true})}>Enviar prueba</Button><Button variant="ghost" disabled={busy} onClick={()=>setConfirmation({device,test:false})}>Desactivar</Button></div>
+            <div className="push-device-details"><h3>{device.etiqueta} {device.id===current&&<Badge tone="info">Este navegador</Badge>}</h3><p>{device.ultima_prueba_en?`Último envío manual: ${fecha(device.ultima_prueba_en)} · ${device.ultima_prueba_estado==='aceptada'?'Aceptada':device.ultima_prueba_estado==='fallida'?'Sin confirmación':'En proceso'}`:`Registrado: ${fecha(device.registrado_en)}`}</p></div>
+            <div className="push-actions"><Button disabled={busy||!status.configurada||(device.id===current&&permission!=='granted')} onClick={()=>setConfirmation({device,action:'test'})}>Enviar prueba</Button><Button disabled={busy||!status.configurada||(device.id===current&&permission!=='granted')} onClick={()=>setConfirmation({device,action:'latest'})}>Enviar última alerta</Button><Button variant="ghost" disabled={busy} onClick={()=>setConfirmation({device,action:'deactivate'})}>Desactivar</Button></div>
           </li>)}</ul>}
-          <details className="alerts-help"><summary>Ayuda con las notificaciones</summary><p>En Android, utiliza Chrome y permite las notificaciones del sitio. Para comprobarlas, deja Chrome en segundo plano y revisa el panel del celular. Se permite una prueba por minuto; la aceptación de Firebase no confirma la entrega. Al cerrar sesión, se desactiva este navegador.</p></details>
+          <details className="alerts-help"><summary>Ayuda con las notificaciones</summary><p>En Android, utiliza Chrome y permite las notificaciones del sitio. Para comprobarlas, deja Chrome en segundo plano y revisa el panel del celular. Enviar última alerta reenvía el aviso más reciente de tu historial personal, con la fecha del evento y marcado como reenvío. Se permite un envío manual por minuto entre ambos botones; la aceptación de Firebase no confirma la entrega. Al cerrar sesión, se desactiva este navegador.</p></details>
         </Panel>
       </>}
     </div>}
     <p className="alerts-footnote"><Icon name="info" size={15}/>Los avisos corresponden a sismos ya reportados por el IGP; no anticipan terremotos.</p>
-    <ConfirmDialog open={!!confirmation} title={confirmation?.test?'¿Enviar una notificación de prueba?':'¿Desactivar este dispositivo?'} description={confirmation?.test?`Se enviará únicamente a «${confirmation.device.etiqueta}» y estará identificada como PRUEBA. Revisa la notificación en ese dispositivo. No representa una alerta sísmica.`:'Este navegador dejará de recibir notificaciones para tu cuenta. Puedes volver a activarlo cuando quieras.'} confirmLabel={confirmation?.test?'Enviar prueba':'Desactivar'} busy={busy} onCancel={()=>{if(!busy)setConfirmation(null)}} onConfirm={()=>void confirm()}/>
+    <ConfirmDialog open={!!confirmation} title={confirmation?.action==='test'?'¿Enviar una notificación de prueba?':confirmation?.action==='latest'?'¿Reenviar tu última alerta?':'¿Desactivar este dispositivo?'} description={confirmation?.action==='test'?`Se enviará únicamente a «${confirmation.device.etiqueta}» y estará identificada como PRUEBA. Revisa la notificación en ese dispositivo. No representa una alerta sísmica.`:confirmation?.action==='latest'?`Se reenviará la última alerta de tu historial personal únicamente a «${confirmation.device.etiqueta}». Incluirá la fecha del sismo y estará marcada como REENVÍO; no representa una alerta nueva.`:'Este navegador dejará de recibir notificaciones para tu cuenta. Puedes volver a activarlo cuando quieras.'} confirmLabel={confirmation?.action==='test'?'Enviar prueba':confirmation?.action==='latest'?'Enviar última alerta':'Desactivar'} busy={busy} onCancel={()=>{if(!busy)setConfirmation(null)}} onConfirm={()=>void confirm()}/>
   </div>
 }
